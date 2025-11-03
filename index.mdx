@@ -1,97 +1,155 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "0xmeta Market Intelligence API"
+description: "Professional-grade crypto market intelligence with pay-per-request pricing"
 ---
 
-## Setting up
+<img
+  style={{ borderRadius: "0.5rem" }}
+  src="/images/hero-dark.png"
+  alt="Market Intelligence Dashboard"
+/>
 
-Get your documentation site up and running in minutes.
+## Welcome to Market Intelligence API
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
+Get real-time crypto market intelligence from curated sources including **crypto-news.com** and verified **X (Twitter)** accounts. Pay only for what you use - **$0.01 USDC per request**.
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart" horizontal>
+  Get started in under 5 minutes
 </Card>
 
-## Make it yours
+## Key Features
 
-Design a docs site that looks great and empowers your users.
+<CardGroup cols={2}>
+  <Card
+    title="Market Trends"
+    icon="chart-line"
+    href="/api-reference/markets/trends"
+  >
+    Track trending narratives and emerging themes across crypto markets
+  </Card>
+  <Card
+    title="Liquidity Signals"
+    icon="droplet"
+    href="/api-reference/markets/liquidity"
+  >
+    Monitor DeFi liquidity flows, TVL changes, and whale movements
+  </Card>
+  <Card
+    title="AI Agent Activity"
+    icon="robot"
+    href="/api-reference/markets/ai-agents"
+  >
+    Track autonomous AI agent ecosystem developments and trading
+  </Card>
+  <Card
+    title="Macro Events"
+    icon="building-columns"
+    href="/api-reference/markets/macro-events"
+  >
+    Monitor regulatory, institutional, and Fed policy developments
+  </Card>
+</CardGroup>
+
+## Why Choose Our API?
+
+<AccordionGroup>
+  <Accordion title="💰 Pay Per Request" icon="dollar-sign">
+    No subscriptions or API keys. Pay **$0.01 USDC** per request via x402 protocol.
+  </Accordion>
+  
+  <Accordion title="⚡ Lightning Fast" icon="bolt">
+    - **Cached responses**: <100ms
+    - **Fresh data**: 2-3 seconds
+    - Multi-layer caching (Redis + Database)
+  </Accordion>
+  
+  <Accordion title="🎯 High Quality Data" icon="bullseye">
+    Curated from:
+    - CryptoNews API (verified sources)
+    - Top crypto X accounts (lookonchain, TheBlock__, etc.)
+    - Onchain data providers
+  </Accordion>
+  
+  <Accordion title="🔒 Secure & Reliable" icon="shield">
+    - x402 payment protocol
+    - 1Shot API integration
+    - 24-hour data retention
+    - Automatic cleanup cron jobs
+  </Accordion>
+</AccordionGroup>
+
+## Data Sources
+
+Our intelligence is aggregated from multiple trusted sources:
+
+<CardGroup cols={3}>
+  <Card title="Crypto News" icon="newspaper">
+    Professional crypto journalism
+  </Card>
+  <Card title="X (Twitter)" icon="x-twitter">
+    Verified crypto analysts
+  </Card>
+  <Card title="Onchain Data" icon="link">
+    Whale tracking & metrics
+  </Card>
+</CardGroup>
+
+## Use Cases
 
 <Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+  <Card title="Trading Signals" icon="chart-candlestick">
+    Identify trends before they go mainstream
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Portfolio Monitoring" icon="briefcase">
+    Track your holdings' market sentiment
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Research & Analysis" icon="magnifying-glass-chart">
+    Deep dive into sector trends
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Market Alerts" icon="bell">
+    Get notified of major developments
   </Card>
 </Columns>
 
-## Create beautiful pages
+## Pricing
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
+<Card title="Simple, Transparent Pricing" icon="tag">
+  **$0.01 USDC** per API request - No monthly fees - No API key required - Pay
+  with crypto (USDC on Base) - x402 protocol integration
 </Card>
+
+<Info>**First-time users**: Get 10 free requests to test the API!</Info>
+
+## Performance
+
+| Metric                        | Value       |
+| ----------------------------- | ----------- |
+| **Response Time (Cached)**    | <100ms      |
+| **Response Time (Fresh)**     | 2-3 seconds |
+| **Cache Duration (Redis)**    | 1 hour      |
+| **Data Retention (Database)** | 24 hours    |
+| **Uptime**                    | 99.9%       |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Try the API" icon="code" href="/quickstart">
+    Make your first request
+  </Card>
+  <Card title="View Endpoints" icon="list" href="/api-reference/introduction">
+    Explore all available endpoints
+  </Card>
+  <Card title="Learn x402" icon="book-open" href="/guides/x402-payments">
+    Understand payment protocol
+  </Card>
+  <Card title="Integration Guide" icon="plug" href="/guides/python-integration">
+    Integrate into your app
+  </Card>
+</CardGroup>
+
+## Trusted By
+
+<Note>
+  Join hundreds of traders, researchers, and developers using Market
+  Intelligence API for real-time crypto insights.
+</Note>

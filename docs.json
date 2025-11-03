@@ -1,69 +1,58 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Market Intelligence API",
   "colors": {
-    "primary": "#16A34A",
+    "primary": "#0D9373",
     "light": "#07C983",
-    "dark": "#15803D"
+    "dark": "#0D9373"
   },
   "favicon": "/favicon.svg",
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
+            "pages": ["index", "quickstart", "authentication", "pricing"]
+          },
+          {
+            "group": "Core Concepts",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "guides/x402-payments",
+              "guides/caching-strategy",
+              "guides/rate-limits",
+              "guides/error-handling"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Integration Guides",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/python-integration",
+              "guides/javascript-integration",
+              "guides/response-format"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Market Intelligence",
             "pages": [
-              "api-reference/introduction"
+              "api-reference/introduction",
+              "api-reference/markets/trends",
+              "api-reference/markets/liquidity",
+              "api-reference/markets/ai-agents",
+              "api-reference/markets/macro-events",
+              "api-reference/markets/proof-of-work"
             ]
           },
           {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
+            "group": "Utilities",
+            "pages": ["api-reference/markets/categories"]
           }
         ]
       }
@@ -71,52 +60,64 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
+          "anchor": "API Playground",
+          "href": "https://docs.api.0xmeta.ai",
+          "icon": "square-terminal"
         },
         {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "Community",
+          "href": "https://x.com/0xMeta_ai",
+          "icon": "x"
+        },
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/0xmetaHQ/X402",
+          "icon": "github"
         }
       ]
     }
   },
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "/logo/dark.svg",
+    "dark": "/logo/light.svg"
   },
   "navbar": {
     "links": [
       {
         "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "href": "mailto:support@your-domain.com"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Get API Access",
+      "href": "https://your-domain.com/dashboard"
     }
   },
+  "api": {
+    "baseUrl": "https://api.your-domain.com",
+    "auth": {
+      "method": "key",
+      "name": "X-Payment-Proof",
+      "inputPrefix": "Bearer "
+    },
+    "playground": {
+      "mode": "show"
+    }
+  },
+  "openapi": "/api-reference/openapi.json",
   "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+    "options": ["copy", "chatgpt", "claude", "cursor"]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/your-handle",
+      "github": "https://github.com/your-org",
+      "linkedin": "https://linkedin.com/company/your-company"
     }
+  },
+  "feedback": {
+    "suggestEdit": true,
+    "raiseIssue": true
   }
 }

@@ -1,94 +1,656 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
-    "license": {
-      "name": "MIT"
-    },
-    "version": "1.0.0"
+    "title": "Oxmeta + RREAD Protocol with Dramatiq",
+    "description": "\n    Professional-grade crypto market intelligence API with pay-per-request pricing.\n    \n    ## Features\n    - \ud83d\udd12 Pay-per-request: $0.01 USDC per call\n    - \ud83d\udcca Real-time market trends and narratives\n    - \ud83d\udca7 DeFi liquidity signals and TVL tracking\n    - \ud83e\udd16 AI agent ecosystem monitoring\n    - \ud83d\udcc8 Macro economic event tracking\n    - \u2b50 Curated proof-of-work intelligence feed\n    \n    ## Authentication\n    All paid endpoints require x402 payment proof via `X-Payment-Proof` header.\n    \n    ## Data Sources\n    - CryptoNews API (verified journalism)\n    - Curated X (Twitter) accounts\n    - Onchain data providers\n    \n    ## Performance\n    - Cached responses: <100ms\n    - Fresh data: 2-3 seconds\n    - Cache TTL: 1 hour (Redis), 24 hours (Database)\n    ",
+    "version": "1.0.0",
+    "x-logo": {
+      "url": "https://api.0xmeta.ai/logo.png",
+      "altText": "Market Intelligence API"
+    }
   },
-  "servers": [
-    {
-      "url": "http://sandbox.mintlify.com"
-    }
-  ],
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
   "paths": {
-    "/plants": {
+    "/v1/markets/trends": {
       "get": {
-        "description": "Returns all plants from the system that the user has access to",
+        "tags": ["\ud83d\udcca Market Intelligence"],
+        "summary": "Get Market Trends",
+        "description": "\ud83d\udd12 **Market Trends** - $0.01 per request\n\nGet trending market narratives and emerging themes across crypto markets.",
+        "operationId": "get_market_trends_v1_markets_trends_get",
         "parameters": [
           {
             "name": "limit",
             "in": "query",
-            "description": "The maximum number of results to return",
+            "required": false,
             "schema": {
               "type": "integer",
-              "format": "int32"
-            }
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Number of trending items",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Number of trending items"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(1h|6h|24h|7d)$",
+              "description": "Timeframe",
+              "default": "24h",
+              "title": "Timeframe"
+            },
+            "description": "Timeframe"
           }
         ],
         "responses": {
           "200": {
-            "description": "Plant response",
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_required": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "recipient": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "error": "Payment required",
+                  "message": "Include X-Payment-Proof header",
+                  "payment_required": {
+                    "amount": 0.01,
+                    "token": "USDC",
+                    "network": "base-sepolia",
+                    "recipient": "0x..."
                   }
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "x402Payment": []
+          }
+        ]
+      }
+    },
+    "/v1/markets/liquidity": {
+      "get": {
+        "tags": ["\ud83d\udcca Market Intelligence"],
+        "summary": "Get Liquidity Signals",
+        "description": "\ud83d\udd12 **Liquidity Signals** - $0.01 per request\n\nTrack DeFi liquidity flows, TVL changes, and capital movement.",
+        "operationId": "get_liquidity_signals_v1_markets_liquidity_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Number of signals",
+              "default": 15,
+              "title": "Limit"
+            },
+            "description": "Number of signals"
           },
-          "400": {
-            "description": "Unexpected error",
+          {
+            "name": "chain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(solana|base|ethereum|all)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Chain filter",
+              "title": "Chain"
+            },
+            "description": "Chain filter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_required": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "recipient": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "error": "Payment required",
+                  "message": "Include X-Payment-Proof header",
+                  "payment_required": {
+                    "amount": 0.01,
+                    "token": "USDC",
+                    "network": "base-sepolia",
+                    "recipient": "0x..."
+                  }
                 }
               }
             }
           }
-        }
-      },
-      "post": {
-        "description": "Creates a new plant in the store",
-        "requestBody": {
-          "description": "Plant to add to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+        },
+        "security": [
+          {
+            "x402Payment": []
+          }
+        ]
+      }
+    },
+    "/v1/markets/agents": {
+      "get": {
+        "tags": ["\ud83d\udcca Market Intelligence"],
+        "summary": "Get Ai Agent Activity",
+        "description": "\ud83d\udd12 **AI Agent Intelligence** - $0.01 per request\n\nMonitor autonomous AI agent ecosystem developments and trading activity.",
+        "operationId": "get_ai_agent_activity_v1_markets_agents_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Number of items",
+              "default": 15,
+              "title": "Limit"
+            },
+            "description": "Number of items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "plant response",
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Plant"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
           },
-          "400": {
-            "description": "unexpected error",
+          "402": {
+            "description": "Payment Required",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_required": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "recipient": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "error": "Payment required",
+                  "message": "Include X-Payment-Proof header",
+                  "payment_required": {
+                    "amount": 0.01,
+                    "token": "USDC",
+                    "network": "base-sepolia",
+                    "recipient": "0x..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "x402Payment": []
+          }
+        ]
+      }
+    },
+    "/v1/markets/macro_events": {
+      "get": {
+        "tags": ["\ud83d\udcca Market Intelligence"],
+        "summary": "Get Macro Events",
+        "description": "\ud83d\udd12 **Macro Events** - $0.01 per request\n\nTrack macro economic events affecting crypto markets.",
+        "operationId": "get_macro_events_v1_markets_macro_events_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Number of events",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Number of events"
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(regulatory|institutional|monetary_policy|all)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Event type filter",
+              "title": "Event Type"
+            },
+            "description": "Event type filter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_required": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "recipient": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "error": "Payment required",
+                  "message": "Include X-Payment-Proof header",
+                  "payment_required": {
+                    "amount": 0.01,
+                    "token": "USDC",
+                    "network": "base-sepolia",
+                    "recipient": "0x..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "x402Payment": []
+          }
+        ]
+      }
+    },
+    "/v1/markets/proof_of_work": {
+      "get": {
+        "tags": ["\ud83d\udcca Market Intelligence"],
+        "summary": "Get Proof Of Work",
+        "description": "\ud83d\udd12 **Proof of Work Feed** - $0.01 per request\n\nCurated, high-signal market intelligence feed. Executive briefing quality.",
+        "operationId": "get_proof_of_work_v1_markets_proof_of_work_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "description": "Number of signals",
+              "default": 10,
+              "title": "Limit"
+            },
+            "description": "Number of signals"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Category filter",
+              "title": "Category"
+            },
+            "description": "Category filter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_required": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "recipient": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "error": "Payment required",
+                  "message": "Include X-Payment-Proof header",
+                  "payment_required": {
+                    "amount": 0.01,
+                    "token": "USDC",
+                    "network": "base-sepolia",
+                    "recipient": "0x..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "x402Payment": []
+          }
+        ]
+      }
+    },
+    "/v1/markets/categories": {
+      "get": {
+        "tags": ["\ud83d\udcca Market Intelligence"],
+        "summary": "Get Available Categories",
+        "description": "\ud83d\udcd6 **Available Categories** - FREE\n\nGet list of all available market intelligence categories.",
+        "operationId": "get_available_categories_v1_markets_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_required": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "network": {
+                          "type": "string"
+                        },
+                        "recipient": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "error": "Payment required",
+                  "message": "Include X-Payment-Proof header",
+                  "payment_required": {
+                    "amount": 0.01,
+                    "token": "USDC",
+                    "network": "base-sepolia",
+                    "recipient": "0x..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "x402Payment": []
+          }
+        ]
+      }
+    },
+    "/v1/payment/request": {
+      "get": {
+        "tags": ["\ud83d\udcb3 Payment Helpers"],
+        "summary": "Create Payment Request",
+        "description": "\ud83d\udd13 **FREE** - Generate a payment request for an endpoint.\n\nThis tells you what payment is needed to access a specific endpoint.\n\n**Example:**\n```\nGET /v1/payment/request?endpoint=/v1/markets/trends\n```",
+        "operationId": "create_payment_request_v1_payment_request_get",
+        "parameters": [
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Endpoint you want to access (e.g., /v1/markets/trends)",
+              "title": "Endpoint"
+            },
+            "description": "Endpoint you want to access (e.g., /v1/markets/trends)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -96,57 +658,166 @@
         }
       }
     },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
+    "/v1/payment/mock-proof": {
+      "post": {
+        "tags": ["\ud83d\udcb3 Payment Helpers"],
+        "summary": "Generate Mock Payment Proof",
+        "description": "\ud83d\udd13 **FREE** - Generate a mock payment proof for TESTNET ONLY.\n\n\u26a0\ufe0f This is for testing purposes only. In production, payment proofs come from actual on-chain transactions.\n\n**Example:**\n```\nPOST /v1/payment/mock-proof\n    ?tx_hash=0x123...\n    &from_address=0xYourWallet\n    &endpoint=/v1/markets/trends\n```\n\nReturns a base64-encoded proof you can use in X-Payment-Proof header.",
+        "operationId": "generate_mock_payment_proof_v1_payment_mock_proof_post",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "description": "ID of plant to delete",
+            "name": "tx_hash",
+            "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+              "type": "string",
+              "description": "Your transaction hash",
+              "title": "Tx Hash"
+            },
+            "description": "Your transaction hash"
+          },
+          {
+            "name": "from_address",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Your wallet address",
+              "title": "From Address"
+            },
+            "description": "Your wallet address"
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Endpoint you're accessing",
+              "title": "Endpoint"
+            },
+            "description": "Endpoint you're accessing"
           }
         ],
         "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
-          "400": {
-            "description": "unexpected error",
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
           }
         }
       }
-    }
-  },
-  "webhooks": {
-    "/plant/webhook": {
-      "post": {
-        "description": "Information about a new plant added to the store",
-        "requestBody": {
-          "description": "Plant added to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+    },
+    "/v1/payment/verify-proof": {
+      "get": {
+        "tags": ["\ud83d\udcb3 Payment Helpers"],
+        "summary": "Verify Payment Proof",
+        "description": "\ud83d\udd13 **FREE** - Verify a payment proof without making an API call.\n\nUseful for debugging. Decodes and validates the proof structure.\n\n**Example:**\n```\nGET /v1/payment/verify-proof?proof=eyJ0eF9oYXNoIjoi...\n```",
+        "operationId": "verify_payment_proof_v1_payment_verify_proof_get",
+        "parameters": [
+          {
+            "name": "proof",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Base64-encoded payment proof",
+              "title": "Proof"
+            },
+            "description": "Base64-encoded payment proof"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/v1/payment/example-flow": {
+      "get": {
+        "tags": ["\ud83d\udcb3 Payment Helpers"],
+        "summary": "Get Example Flow",
+        "description": "\ud83d\udcd6 **FREE** - Complete example flow for testing with Postman/curl.\n\nShows step-by-step how to test the paid endpoints.",
+        "operationId": "get_example_flow_v1_payment_example_flow_get",
         "responses": {
           "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment/quick-test": {
+      "get": {
+        "tags": ["\ud83d\udcb3 Payment Helpers"],
+        "summary": "Quick Test Endpoint",
+        "description": "\ud83d\ude80 **FREE** - One-step test for developers.\n\nThis combines steps 2-4 into one call for quick testing.\nTESTNET ONLY - does not work on mainnet.\n\n**Example:**\n```\nGET /v1/payment/quick-test?endpoint=/v1/markets/trends\n```\n\nReturns the API response as if you had paid.",
+        "operationId": "quick_test_endpoint_v1_payment_quick_test_get",
+        "parameters": [
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Endpoint to test",
+              "default": "/v1/markets/trends",
+              "title": "Endpoint"
+            },
+            "description": "Endpoint to test"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -154,64 +825,2119 @@
   },
   "components": {
     "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
+      "AddImage": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          }
+        },
         "type": "object",
+        "required": ["id", "image"],
+        "title": "AddImage"
+      },
+      "Agent": {
         "properties": {
           "name": {
-            "description": "The name of the plant",
-            "type": "string"
+            "type": "string",
+            "title": "Name"
           },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
-          }
-        }
-      },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
-          },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
+          "narrative_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
               }
-            }
+            ],
+            "title": "Narrative Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "ecosystem_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ecosystem Id"
+          },
+          "preferred_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Model"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools"
+          },
+          "uploaded_files": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded Files"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts"
+          },
+          "examples": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Examples"
+          },
+          "behaviour": {
+            "type": "string",
+            "title": "Behaviour"
           }
-        ]
-      },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
+        },
         "type": "object",
+        "required": ["name", "type", "prompt", "behaviour"],
+        "title": "Agent"
+      },
+      "AgentPrompt": {
         "properties": {
-          "error": {
+          "agent_type": {
+            "$ref": "#/components/schemas/AgentType"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prompt_template": {
+            "type": "string",
+            "title": "Prompt Template"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": "1.0.0"
+          },
+          "required_variables": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Variables"
+          },
+          "optional_variables": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optional Variables"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "model_preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Preferences"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PromptStatus",
+            "default": "active"
+          }
+        },
+        "type": "object",
+        "required": ["agent_type", "name", "prompt_template"],
+        "title": "AgentPrompt"
+      },
+      "AgentType": {
+        "type": "string",
+        "enum": [
+          "research",
+          "review",
+          "extract",
+          "coding_expert",
+          "narrative_expert"
+        ],
+        "title": "AgentType",
+        "description": "Supported agent types"
+      },
+      "AvailableStatuses": {
+        "properties": {
+          "statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Statuses"
+          },
+          "descriptions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Descriptions"
+          }
+        },
+        "type": "object",
+        "required": ["statuses", "descriptions"],
+        "title": "AvailableStatuses",
+        "description": "Schema for available prompt statuses"
+      },
+      "AvailableTypes": {
+        "properties": {
+          "agent_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Agent Types"
+          },
+          "descriptions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Descriptions"
+          }
+        },
+        "type": "object",
+        "required": ["agent_types", "descriptions"],
+        "title": "AvailableTypes",
+        "description": "Schema for available agent types"
+      },
+      "CategorizeProject": {
+        "properties": {
+          "sub_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Category"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          }
+        },
+        "type": "object",
+        "title": "CategorizeProject"
+      },
+      "CategorizeProjects": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Ids"
+          },
+          "sub_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Category"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "narrative_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative Id"
+          },
+          "notable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notable"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "launch_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Launch Date"
+          }
+        },
+        "type": "object",
+        "required": ["ids"],
+        "title": "CategorizeProjects"
+      },
+      "ChangePassword": {
+        "properties": {
+          "old_password": {
+            "type": "string",
+            "title": "Old Password"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": ["old_password", "password"],
+        "title": "ChangePassword"
+      },
+      "ChatAgent": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          }
+        },
+        "type": "object",
+        "required": ["prompt"],
+        "title": "ChatAgent"
+      },
+      "ConversationRequestNarrative": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "User message"
+          },
+          "narrative_id": {
             "type": "integer",
-            "format": "int32"
+            "title": "Narrative Id"
+          }
+        },
+        "type": "object",
+        "required": ["prompt", "narrative_id"],
+        "title": "ConversationRequestNarrative"
+      },
+      "ConversationRequestProject": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "User message"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          }
+        },
+        "type": "object",
+        "required": ["prompt", "project_id"],
+        "title": "ConversationRequestProject"
+      },
+      "EditAgent": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "narrative_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "ecosystem_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ecosystem Id"
+          },
+          "preferred_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Model"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools"
+          },
+          "uploaded_files": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded Files"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts"
+          },
+          "examples": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Examples"
+          },
+          "behaviour": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Behaviour"
+          }
+        },
+        "type": "object",
+        "title": "EditAgent"
+      },
+      "EditProject": {
+        "properties": {
+          "narrative_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "token_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Status"
+          },
+          "base_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Address"
+          },
+          "pair_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Address"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "sub_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Category"
+          },
+          "verified_social_links": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Social Links"
+          },
+          "pivot_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pivot Status"
+          },
+          "product_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Summary"
+          },
+          "standout_features": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standout Features"
+          },
+          "problem_solved": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem Solved"
+          },
+          "fundamental_analysis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fundamental Analysis"
+          },
+          "adoption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adoption"
+          },
+          "competitive_landscape": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competitive Landscape"
+          },
+          "recent_events": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent Events"
+          },
+          "technical_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technical Snapshot"
+          },
+          "market_sentiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Sentiment"
+          },
+          "narrative_classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative Classification"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "areas_for_improvement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Areas For Improvement"
+          },
+          "value_insight": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Insight"
+          },
+          "summary_signal_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Signal Profile"
+          },
+          "notable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notable"
+          },
+          "launch_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Launch Date"
+          },
+          "post_launch_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Launch End"
+          }
+        },
+        "type": "object",
+        "title": "EditProject"
+      },
+      "ForgotPassword": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": ["email"],
+        "title": "ForgotPassword"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InviteUser": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "admin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": ["email"],
+        "title": "InviteUser"
+      },
+      "LiquidityOut": {
+        "properties": {
+          "usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usd"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "type": "object",
+        "required": ["usd", "base", "quote"],
+        "title": "LiquidityOut"
+      },
+      "Login": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": ["email", "password"],
+        "title": "Login"
+      },
+      "PaginatedResult_ProductOut_": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ProductOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": ["page", "page_size", "total", "total_pages", "data"],
+        "title": "PaginatedResult"
+      },
+      "ProductOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "narrative_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "token_status": {
+            "type": "string",
+            "title": "Token Status"
+          },
+          "base_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Address"
+          },
+          "base_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Name"
+          },
+          "base_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Symbol"
+          },
+          "quote_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Address"
+          },
+          "quote_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Name"
+          },
+          "quote_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Symbol"
+          },
+          "pair_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Address"
+          },
+          "price_native": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Native"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "market_cap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Cap"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "sub_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Category"
+          },
+          "verified_social_links": {
+            "type": "string",
+            "title": "Verified Social Links"
+          },
+          "pivot_status": {
+            "type": "string",
+            "title": "Pivot Status"
+          },
+          "product_summary": {
+            "type": "string",
+            "title": "Product Summary"
+          },
+          "standout_features": {
+            "type": "string",
+            "title": "Standout Features"
+          },
+          "problem_solved": {
+            "type": "string",
+            "title": "Problem Solved"
+          },
+          "fundamental_analysis": {
+            "type": "string",
+            "title": "Fundamental Analysis"
+          },
+          "adoption": {
+            "type": "string",
+            "title": "Adoption"
+          },
+          "competitive_landscape": {
+            "type": "string",
+            "title": "Competitive Landscape"
+          },
+          "recent_events": {
+            "type": "string",
+            "title": "Recent Events"
+          },
+          "technical_snapshot": {
+            "type": "string",
+            "title": "Technical Snapshot"
+          },
+          "market_sentiment": {
+            "type": "string",
+            "title": "Market Sentiment"
+          },
+          "narrative_classification": {
+            "type": "string",
+            "title": "Narrative Classification"
+          },
+          "rating": {
+            "type": "string",
+            "title": "Rating"
+          },
+          "areas_for_improvement": {
+            "type": "string",
+            "title": "Areas For Improvement"
+          },
+          "value_insight": {
+            "type": "string",
+            "title": "Value Insight"
+          },
+          "summary_signal_profile": {
+            "type": "string",
+            "title": "Summary Signal Profile"
+          },
+          "summary_signal_profile_parsed": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Signal Profile Parsed"
+          },
+          "notable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notable"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "launch_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Launch Date"
+          },
+          "post_launch_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Launch End"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Summary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "price_change_h1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change H1"
+          },
+          "price_change_h6": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change H6"
+          },
+          "price_change_h24": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change H24"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VolumeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "liquidity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiquidityOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "website": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Website"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "narrative_id",
+          "name",
+          "domain",
+          "token_status",
+          "base_address",
+          "base_name",
+          "base_symbol",
+          "quote_address",
+          "quote_name",
+          "quote_symbol",
+          "pair_address",
+          "price_native",
+          "price_usd",
+          "market_cap",
+          "verified_social_links",
+          "pivot_status",
+          "product_summary",
+          "standout_features",
+          "problem_solved",
+          "fundamental_analysis",
+          "adoption",
+          "competitive_landscape",
+          "recent_events",
+          "technical_snapshot",
+          "market_sentiment",
+          "narrative_classification",
+          "rating",
+          "areas_for_improvement",
+          "value_insight",
+          "summary_signal_profile",
+          "notable",
+          "success",
+          "launch_date",
+          "post_launch_end",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProductOut"
+      },
+      "PromptStatus": {
+        "type": "string",
+        "enum": ["active", "inactive", "testing", "deprecated"],
+        "title": "PromptStatus",
+        "description": "Prompt status"
+      },
+      "Register": {
+        "properties": {
+          "signature": {
+            "type": "string",
+            "title": "Signature"
+          },
+          "public_address": {
+            "type": "string",
+            "title": "Public Address"
           },
           "message": {
-            "type": "string"
+            "type": "string",
+            "title": "Message"
+          },
+          "referrer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referrer Id"
+          },
+          "chain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["solana", "evm"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain"
+          },
+          "primary_auth_method": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["email_password", "metamask", "phantom"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Auth Method"
           }
-        }
+        },
+        "type": "object",
+        "required": ["signature", "public_address", "message"],
+        "title": "Register"
+      },
+      "Request": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "twitter_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twitter Url"
+          },
+          "discord_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discord Url"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": ["domain", "description"],
+        "title": "Request"
+      },
+      "ResetPassword": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": ["token", "password"],
+        "title": "ResetPassword"
+      },
+      "ResponseModel_PaginatedResult_ProductOut__": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PaginatedResult_ProductOut_"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code",
+            "default": 200
+          }
+        },
+        "type": "object",
+        "required": ["message", "data"],
+        "title": "ResponseModel[PaginatedResult[ProductOut]]"
+      },
+      "StartRREADRequest": {
+        "properties": {
+          "project_name": {
+            "type": "string",
+            "title": "Project Name",
+            "description": "Name of the project to analyze"
+          },
+          "project_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Url",
+            "description": "Optional URL of the project"
+          },
+          "is_virtual": {
+            "type": "boolean",
+            "title": "Is Virtual",
+            "description": "If the project or product is on virtuals ecosystem",
+            "default": false
+          },
+          "user_facts": {
+            "items": {
+              "$ref": "#/components/schemas/UserFactRequest"
+            },
+            "type": "array",
+            "title": "User Facts",
+            "description": "User-provided facts about the project",
+            "default": []
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "description": "How deep the research should go: low, normal, high",
+            "default": "normal"
+          },
+          "auto_approve_threshold": {
+            "type": "number",
+            "title": "Auto Approve Threshold",
+            "description": "Quality threshold for auto-approval (0.0-1.0)"
+          },
+          "force_human_approval": {
+            "type": "boolean",
+            "title": "Force Human Approval",
+            "description": "\ud83d\udd25 Force human approval regardless of quality scores",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["project_name"],
+        "title": "StartRREADRequest",
+        "description": "Request to start RREAD analysis"
+      },
+      "Summary": {
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "short": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short"
+          },
+          "long": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long"
+          }
+        },
+        "type": "object",
+        "title": "Summary",
+        "description": "Summary"
+      },
+      "UpdateAgentPrompt": {
+        "properties": {
+          "agent_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "prompt_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Template"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "required_variables": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Variables"
+          },
+          "optional_variables": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optional Variables"
+          },
+          "is_default": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Default"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "model_preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Preferences"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "UpdateAgentPrompt"
+      },
+      "UpdateRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["rejected", "denied"],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "UpdateRequest"
+      },
+      "UserFactRequest": {
+        "properties": {
+          "fact_type": {
+            "type": "string",
+            "title": "Fact Type",
+            "description": "Type of fact (e.g., 'user_preference', 'market_context')"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "The actual fact content"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence",
+            "description": "Confidence level: low, medium, high",
+            "default": "medium"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "description": "Priority: low, normal, critical",
+            "default": "normal"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Source of the fact"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight",
+            "description": "How much to trust this vs discovered data",
+            "default": 0.7
+          }
+        },
+        "type": "object",
+        "required": ["fact_type", "content"],
+        "title": "UserFactRequest",
+        "description": "User fact input model"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      },
+      "VolumeOut": {
+        "properties": {
+          "h1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H1"
+          },
+          "h6": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H6"
+          },
+          "h24": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H24"
+          },
+          "m5": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "M5"
+          }
+        },
+        "type": "object",
+        "required": ["h1", "h6", "h24", "m5"],
+        "title": "VolumeOut"
+      },
+      "Website": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": ["label", "url"],
+        "title": "Website"
       }
     },
     "securitySchemes": {
-      "bearerAuth": {
+      "HTTPBearer": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "x402Payment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Payment-Proof",
+        "description": "\n        Payment proof from x402 protocol \n        \n        To get a payment proof:\n        1. Connect your Web3 wallet\n        2. Approve $0.01 USDC payment\n        3. Receive payment proof JWT\n        4. Include in this header\n        \n        Example: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`\n        ",
+        "x-displayName": "x402 Payment Proof"
       }
     }
+  },
+  "servers": [
+    {
+      "url": "https://api.0xmeta.ai",
+      "description": "Production server"
+    },
+    {
+      "url": "http://localhost:8080",
+      "description": "Development server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "\ud83d\udcca Market Intelligence",
+      "description": "\n            Real-time crypto market intelligence endpoints.\n            \n            **Cost**: $0.01 USDC per request\n            \n            All endpoints return curated data from multiple sources including\n            crypto-news, verified X accounts, and onchain analytics.\n            "
+    },
+    {
+      "name": "\ud83d\udcd6 Documentation",
+      "description": "API documentation and utility endpoints (free)"
+    }
+  ],
+  "externalDocs": {
+    "description": "Full Documentation",
+    "url": "https://docs.api.0xmeta.ai"
   }
 }
