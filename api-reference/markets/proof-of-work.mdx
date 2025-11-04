@@ -1,37 +1,49 @@
 ---
-title: "Proof Of Work"
-openapi: "GET /v1/markets/proof_of_work"
+title: "Proof of Work"
+description: "Evidence and raw signals behind 0xmeta intelligence outputs"
 ---
 
-Get trending market narratives and emerging themes across crypto markets.
+## Endpoint
 
-## Overview
+https://api.0xmeta.ai/v1/markets/proof_of_work
 
-Track trending narratives, categories, and emerging themes by analyzing:
+### Description
 
-- Social sentiment from X (Twitter)
-- Onchain activity
-- News flow from crypto-news
+Retrieve the underlying raw signal events (metadata) that were used in 0xmeta’s intelligence scoring engine. Useful for audit, transparency, and downstream enrichment.
 
-## Use Cases
+### Query Parameters
 
-<CardGroup cols={2}>
-  <Card title="Trading Signals" icon="chart-line">
-    Identify trends before they go mainstream
-  </Card>
-  <Card title="Market Research" icon="magnifying-glass">
-    Track sector-specific trends
-  </Card>
-  <Card title="Portfolio Monitoring" icon="briefcase">
-    Monitor your holdings' sentiment
-  </Card>
-  <Card title="Competitive Intel" icon="shield">
-    Track competitor mentions
-  </Card>
-</CardGroup>
+| Name        | Type    | Description                                                  | Default |
+| ----------- | ------- | ------------------------------------------------------------ | ------- |
+| `limit`     | integer | Max number of records returned                               | `10`    |
+| `timeframe` | string  | Time window for raw signal capture (e.g., `1h`, `24h`, `7d`) | `24h`   |
 
-## Best Practices
+### Response Example
 
-<Tip>Cache responses for 5-10 minutes to avoid duplicate payments</Tip>
-
-<Warning>Longer timeframes (`7d`) may include less fresh data</Warning>
+```json
+{
+  "success": true,
+  "timeframe": "24h",
+  "raw_signals": [
+    {
+      "signal_id": "news_2025_11_04_001",
+      "source_type": "news",
+      "signal": "Major protocol X raised funding",
+      "metadata": {
+        /* compressed */
+      },
+      "timestamp": 1730566890.0
+    },
+    {
+      "signal_id": "social_2025_11_04_002",
+      "source_type": "social",
+      "signal": "Twitter mentions of $ARB up 150%",
+      "metadata": {
+        /* compressed */
+      },
+      "timestamp": 1730566800.0
+    }
+  ],
+  "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+}
+```

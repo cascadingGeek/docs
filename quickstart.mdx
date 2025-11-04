@@ -3,274 +3,273 @@ title: "Quick Start"
 description: "Make your first API request in under 5 minutes"
 ---
 
+# Quickstart
+
+Get started with the **0xMeta AI API** in just a few minutes.  
+You'll connect your wallet, obtain a payment proof, and query live market intelligence data.
+
+---
+
 ## Get Started in Three Steps
 
 <Steps>
-  <Step title="Get Payment Proof">
-    Connect your wallet and approve a $0.01 USDC payment to get your payment proof.
-    
-    <CodeGroup>
-    ```bash Browser (Easiest)
-    # Simply visit any endpoint in your browser
-    # You'll see a payment UI automatically
-    https://api.your-domain.com/v1/markets/trends
-    ```
 
-    ```python Python (Web3.py)
-    from web3 import Web3
-    import requests
+<Step title="Get Payment Proof">
 
-    # Connect wallet
-    w3 = Web3(Web3.HTTPProvider('https://sepolia.base.org'))
-    account = w3.eth.account.from_key('your_private_key')
+Connect your wallet and approve a small payment to receive your payment proof via **x402**.
 
-    # Get payment proof
-    # (See full example in Python integration guide)
-    ```
-    </CodeGroup>
+<CodeGroup>
 
-  </Step>
+```bash Browser
+# Visit any endpoint in your browser and you'll be prompted to pay.
+https://api.0xmeta.ai/v1/markets/trends
+```
 
-  <Step title="Make Your First Request">
-    Use the payment proof to call any endpoint.
-    
-    <CodeGroup>
-    ```bash cURL
-    curl -X GET "https://api.your-domain.com/v1/markets/trends?limit=10&timeframe=24h" \
-      -H "X-Payment-Proof: YOUR_PAYMENT_PROOF_HERE"
-    ```
+```python Python
+from web3 import Web3
+import requests
 
-    ```javascript JavaScript (Fetch)
-    const response = await fetch(
-      'https://api.your-domain.com/v1/markets/trends?limit=10&timeframe=24h',
+# Connect wallet
+w3 = Web3(Web3.HTTPProvider('https://sepolia.base.org'))
+account = w3.eth.account.from_key('YOUR_PRIVATE_KEY')
+
+# Trigger the payment UI (handled automatically) and get your payment proof
+# (Example logic should be adapted in your app)
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Make Your First Request">
+
+Use the payment proof to call any endpoint.
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET "https://api.0xmeta.ai/v1/markets/trends?limit=10&timeframe=24h" \
+  -H "X-Payment-Proof: YOUR_PAYMENT_PROOF"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  "https://api.0xmeta.ai/v1/markets/trends?limit=10&timeframe=24h",
+  {
+    headers: {
+      "X-Payment-Proof": "YOUR_PAYMENT_PROOF",
+    },
+  }
+);
+
+const data = await response.json();
+console.log("Trending categories:", data.trends.trending_categories);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "https://api.0xmeta.ai/v1/markets/trends",
+    headers={"X-Payment-Proof": "YOUR_PAYMENT_PROOF"},
+    params={"limit": 10, "timeframe": "24h"}
+)
+data = response.json()
+print("Trending categories:", data["trends"]["trending_categories"])
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Handle the Response">
+
+Process the market intelligence data:
+
+```json Response Example
+{
+  "success": true,
+  "timeframe": "24h",
+  "trends": {
+    "trending_categories": [
       {
-        headers: {
-          'X-Payment-Proof': 'YOUR_PAYMENT_PROOF_HERE'
-        }
-      }
-    );
-
-    const data = await response.json();
-    console.log('Trending categories:', data.trends.trending_categories);
-    ```
-
-    ```python Python (Requests)
-    import requests
-
-    response = requests.get(
-        'https://api.your-domain.com/v1/markets/trends',
-        headers={
-            'X-Payment-Proof': 'YOUR_PAYMENT_PROOF_HERE'
-        },
-        params={
-            'limit': 10,
-            'timeframe': '24h'
-        }
-    )
-
-    data = response.json()
-    print('Trending categories:', data['trends']['trending_categories'])
-    ```
-    </CodeGroup>
-
-  </Step>
-
-  <Step title="Handle the Response">
-    Process the market intelligence data.
-    
-    ```json Response Example
-    {
-      "success": true,
-      "timeframe": "24h",
-      "trends": {
-        "trending_categories": [
-          {
-            "category": "defi",
-            "count": 45,
-            "description": "Decentralized finance protocols"
-          },
-          {
-            "category": "ai_agents",
-            "count": 32,
-            "description": "Autonomous AI agent ecosystem"
-          }
-        ],
-        "trending_narratives": [
-          {
-            "narrative_id": "defi_yields_rising",
-            "item_count": 15,
-            "primary_tokens": ["$AAVE", "$CRV", "$CVX"],
-            "sample_signal": "DeFi yields surge as..."
-          }
-        ],
-        "recent_items": [
-          {
-            "signal": "Breaking: Major DeFi protocol...",
-            "sentiment": "bullish",
-            "tokens": ["$AAVE"],
-            "timestamp": 1730566890.0
-          }
-        ]
+        "category": "defi",
+        "count": 45,
+        "description": "Decentralized finance protocols"
       },
-      "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-    }
-    ```
-  </Step>
+      {
+        "category": "ai_agents",
+        "count": 32,
+        "description": "Autonomous AI agent ecosystem"
+      }
+    ],
+    "trending_narratives": [
+      {
+        "narrative_id": "defi_yields_rising",
+        "item_count": 15,
+        "primary_tokens": ["$AAVE", "$CRV", "$CVX"],
+        "sample_signal": "DeFi yields surge as..."
+      }
+    ],
+    "recent_items": [
+      {
+        "signal": "Breaking: Major DeFi protocol...",
+        "sentiment": "bullish",
+        "tokens": ["$AAVE"],
+        "timestamp": 1730566890.0
+      }
+    ]
+  },
+  "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+}
+```
+
+</Step>
+
 </Steps>
+
+---
 
 ## Complete Examples
 
 <AccordionGroup>
-  <Accordion title="Python Complete Example" icon="python">
-    ```python
-    import requests
-    from web3 import Web3
 
-    # Configuration
-    API_BASE_URL = "https://api.your-domain.com"
-    PAYMENT_PROOF = "YOUR_PROOF_HERE"
+<Accordion title="Python Complete Example" icon="python">
 
-    def get_market_trends(limit=10, timeframe="24h"):
-        """Fetch market trends"""
-        response = requests.get(
-            f"{API_BASE_URL}/v1/markets/trends",
-            headers={"X-Payment-Proof": PAYMENT_PROOF},
-            params={"limit": limit, "timeframe": timeframe}
-        )
+```python
+import requests
+from web3 import Web3
 
-        if response.status_code == 200:
-            data = response.json()
-            return data['trends']
-        elif response.status_code == 402:
-            print("Payment required!")
-            return None
-        else:
-            print(f"Error: {response.status_code}")
-            return None
+API_BASE_URL = "https://api.0xmeta.ai"
+PAYMENT_PROOF = "YOUR_PAYMENT_PROOF_HERE"
 
-    # Use it
+def get_market_trends(limit=10, timeframe="24h"):
+    response = requests.get(
+        f"{API_BASE_URL}/v1/markets/trends",
+        headers={"X-Payment-Proof": PAYMENT_PROOF},
+        params={"limit": limit, "timeframe": timeframe}
+    )
+    if response.status_code == 200:
+        return response.json()["trends"]
+    elif response.status_code == 402:
+        print("Payment required!")
+    else:
+        print(f"Error: {response.status_code}")
+
+if __name__ == "__main__":
     trends = get_market_trends()
     if trends:
         print("Top trending categories:")
-        for cat in trends['trending_categories'][:5]:
+        for cat in trends["trending_categories"][:5]:
             print(f"  - {cat['category']}: {cat['count']} mentions")
-    ```
+```
 
-  </Accordion>
+</Accordion>
 
-  <Accordion title="JavaScript Complete Example" icon="js">
-    ```javascript
-    const API_BASE_URL = "https://api.your-domain.com";
-    const PAYMENT_PROOF = "YOUR_PROOF_HERE";
+<Accordion title="JavaScript Complete Example" icon="js">
 
-    async function getMarketTrends(limit = 10, timeframe = "24h") {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/v1/markets/trends?limit=${limit}&timeframe=${timeframe}`,
-          {
-            headers: {
-              'X-Payment-Proof': PAYMENT_PROOF
-            }
-          }
-        );
+```javascript
+const API_BASE_URL = "https://api.0xmeta.ai";
+const PAYMENT_PROOF = "YOUR_PAYMENT_PROOF_HERE";
 
-        if (response.status === 200) {
-          const data = await response.json();
-          return data.trends;
-        } else if (response.status === 402) {
-          console.error('Payment required!');
-          return null;
-        } else {
-          console.error(`Error: ${response.status}`);
-          return null;
-        }
-      } catch (error) {
-        console.error('Request failed:', error);
-        return null;
-      }
+async function getMarketTrends(limit = 10, timeframe = "24h") {
+  const response = await fetch(
+    `${API_BASE_URL}/v1/markets/trends?limit=${limit}&timeframe=${timeframe}`,
+    { headers: { "X-Payment-Proof": PAYMENT_PROOF } }
+  );
+
+  if (response.status === 200) {
+    const data = await response.json();
+    return data.trends;
+  } else if (response.status === 402) {
+    console.error("Payment required!");
+  } else {
+    console.error(`Error: ${response.status}`);
+  }
+}
+
+(async () => {
+  const trends = await getMarketTrends();
+  if (trends) {
+    console.log("Top trending categories:");
+    trends.trending_categories.slice(0, 5).forEach((cat) => {
+      console.log(`  - ${cat.category}: ${cat.count} mentions`);
+    });
+  }
+})();
+```
+
+</Accordion>
+
+<Accordion title="TypeScript with Type Safety" icon="typescript">
+
+```typescript
+interface MarketTrends {
+  success: boolean;
+  timeframe: string;
+  trends: {
+    trending_categories: {
+      category: string;
+      count: number;
+      description: string;
+    }[];
+    trending_narratives: {
+      narrative_id: string;
+      item_count: number;
+      primary_tokens: string[];
+      sample_signal: string;
+    }[];
+    recent_items: any[];
+  };
+  payer: string;
+}
+
+async function getMarketTrends(
+  limit = 10,
+  timeframe: "1h" | "6h" | "24h" | "7d" = "24h"
+): Promise<MarketTrends> {
+  const response = await fetch(
+    `https://api.0xmeta.ai/v1/markets/trends?limit=${limit}&timeframe=${timeframe}`,
+    {
+      headers: { "X-Payment-Proof": process.env.PAYMENT_PROOF! },
     }
+  );
 
-    // Use it
-    const trends = await getMarketTrends();
-    if (trends) {
-      console.log('Top trending categories:');
-      trends.trending_categories.slice(0, 5).forEach(cat => {
-        console.log(`  - ${cat.category}: ${cat.count} mentions`);
-      });
-    }
-    ```
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
 
-  </Accordion>
+  return response.json() as Promise<MarketTrends>;
+}
+```
 
-  <Accordion title="TypeScript with Type Safety" icon="typescript">
-    ```typescript
-    interface MarketTrends {
-      success: boolean;
-      timeframe: string;
-      trends: {
-        trending_categories: Array<{
-          category: string;
-          count: number;
-          description: string;
-        }>;
-        trending_narratives: Array<{
-          narrative_id: string;
-          item_count: number;
-          primary_tokens: string[];
-          sample_signal: string;
-        }>;
-        recent_items: Array<any>;
-      };
-      payer: string;
-    }
+</Accordion>
 
-    async function getMarketTrends(
-      limit: number = 10,
-      timeframe: '1h' | '6h' | '24h' | '7d' = '24h'
-    ): Promise<MarketTrends | null> {
-      const response = await fetch(
-        `https://api.your-domain.com/v1/markets/trends?limit=${limit}&timeframe=${timeframe}`,
-        {
-          headers: {
-            'X-Payment-Proof': process.env.PAYMENT_PROOF!
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      return response.json();
-    }
-    ```
-
-  </Accordion>
 </AccordionGroup>
+
+---
 
 ## Error Handling
 
 <CodeGroup>
+
 ```python Python
 try:
     response = requests.get(url, headers=headers)
-    
     if response.status_code == 200:
         data = response.json()
-        # Process data
     elif response.status_code == 402:
-        print("Payment required - get new payment proof")
+        print("Payment required — get new payment proof")
     elif response.status_code == 429:
-        print("Rate limited - wait and retry")
+        print("Rate limited — wait and retry")
     elif response.status_code == 500:
-        print("Server error - retry later")
+        print("Server error — retry later")
     else:
         print(f"Unexpected error: {response.status_code}")
-        
 except requests.exceptions.Timeout:
-    print("Request timeout - retry")
+    print("Request timeout — retry")
 except requests.exceptions.ConnectionError:
-    print("Connection error - check internet")
+    print("Connection error — check internet")
 ```
 
 ```javascript JavaScript
@@ -288,15 +287,13 @@ try {
     console.error(`HTTP ${response.status}`);
   }
 } catch (error) {
-  if (error.name === "AbortError") {
-    console.error("Request timeout");
-  } else {
-    console.error("Request failed:", error);
-  }
+  console.error("Request failed:", error);
 }
 ```
 
 </CodeGroup>
+
+---
 
 ## Best Practices
 
@@ -314,6 +311,8 @@ try {
     Implement exponential backoff for retries
   </Card>
 </CardGroup>
+
+---
 
 ## Next Steps
 

@@ -1,0 +1,40 @@
+````mdx
+---
+title: "JavaScript Integration"
+description: "Integrate 0xmeta into your JavaScript or TypeScript project"
+---
+
+## JavaScript Integration Example
+
+```javascript
+const API_BASE_URL = "https://api.0xmeta.ai";
+const PAYMENT_PROOF = "YOUR_PAYMENT_PROOF_HERE";
+
+async function getMarketTrends(limit = 10, timeframe = "24h") {
+  const response = await fetch(
+    `${API_BASE_URL}/v1/markets/trends?limit=${limit}&timeframe=${timeframe}`,
+    {
+      headers: {
+        "X-Payment-Proof": PAYMENT_PROOF,
+      },
+    }
+  );
+
+  if (response.status === 200) {
+    const data = await response.json();
+    return data;
+  } else if (response.status === 402) {
+    throw new Error("Payment required – obtain new proof");
+  } else if (response.status === 429) {
+    throw new Error("Rate limited – retry later");
+  } else {
+    throw new Error(`Unexpected status: ${response.status}`);
+  }
+}
+
+(async () => {
+  const data = await getMarketTrends(5, "1h");
+  console.log(data);
+})();
+```
+````

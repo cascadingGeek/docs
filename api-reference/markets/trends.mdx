@@ -1,37 +1,63 @@
 ---
 title: "Market Trends"
-openapi: "GET /v1/markets/trends"
+description: "Retrieve trending narratives and categories from 0xmeta intelligence graph"
 ---
 
-Get trending market narratives and emerging themes across crypto markets.
+## Endpoint
 
-## Overview
+https://api.0xmeta.ai/v1/markets/trends
 
-Track trending narratives, categories, and emerging themes by analyzing:
+### Description
 
-- Social sentiment from X (Twitter)
-- Onchain activity
-- News flow from crypto-news
+Retrieve real-time trending categories, narratives, and signals tracked by 0xmeta’s intelligence graph.
 
-## Use Cases
+### Query Parameters
 
-<CardGroup cols={2}>
-  <Card title="Trading Signals" icon="chart-line">
-    Identify trends before they go mainstream
-  </Card>
-  <Card title="Market Research" icon="magnifying-glass">
-    Track sector-specific trends
-  </Card>
-  <Card title="Portfolio Monitoring" icon="briefcase">
-    Monitor your holdings' sentiment
-  </Card>
-  <Card title="Competitive Intel" icon="shield">
-    Track competitor mentions
-  </Card>
-</CardGroup>
+| Name        | Type    | Description                          | Default |
+| ----------- | ------- | ------------------------------------ | ------- |
+| `limit`     | integer | Max number of items returned         | `10`    |
+| `timeframe` | string  | Time window; e.g., `1h`, `24h`, `7d` | `24h`   |
 
-## Best Practices
+### Response Example
 
-<Tip>Cache responses for 5-10 minutes to avoid duplicate payments</Tip>
+```json
+{
+  "success": true,
+  "timeframe": "24h",
+  "trends": {
+    "trending_categories": [
+      {
+        "category": "defi",
+        "count": 45,
+        "description": "Decentralized finance protocols"
+      },
+      {
+        "category": "ai_agents",
+        "count": 32,
+        "description": "Autonomous AI agent ecosystem"
+      }
+    ],
+    "trending_narratives": [
+      {
+        "narrative_id": "defi_yields_rising",
+        "item_count": 15,
+        "primary_tokens": ["$AAVE", "$CRV", "$CVX"],
+        "sample_signal": "DeFi yields surge as..."
+      }
+    ],
+    "recent_items": [
+      {
+        "signal": "Breaking: Major DeFi protocol...",
+        "sentiment": "bullish",
+        "tokens": ["$AAVE"],
+        "timestamp": 1730566890.0
+      }
+    ]
+  },
+  "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+}
+```
 
-<Warning>Longer timeframes (`7d`) may include less fresh data</Warning>
+```
+
+```

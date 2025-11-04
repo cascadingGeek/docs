@@ -1,0 +1,18 @@
+---
+title: "Rate Limits"
+description: "Understand request limits for 0xmeta API"
+---
+
+## Rate Limits
+
+To ensure stability for all our users, 0xmeta enforces the following rate limits:
+
+| Scope     | Limit                               |
+| --------- | ----------------------------------- |
+| Free tier | 10 requests/minute                  |
+| Paid tier | 60 requests/minute or as negotiated |
+
+### Handling Rate Limit Responses
+
+- If you receive HTTP `429 Too Many Requests`, back-off and retry after a short delay.
+- For sustained usage, contact our sales team to increase your rate quota.

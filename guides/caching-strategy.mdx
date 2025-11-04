@@ -1,0 +1,20 @@
+```mdx
+---
+title: "Caching Strategy"
+description: "How 0xmeta caches data and how you should integrate"
+---
+
+## Caching Strategy
+
+0xmeta uses a multi-layered caching strategy to deliver fast responses while maintaining freshness:
+
+- **Edge Cache (CDN)**: Rarely more than 30 seconds stale.
+- **Redis / In-memory cache (1 hour TTL)**: Popular endpoints stay warm.
+- **Primary Database (24-hour retention)**: All raw data is retained for up to 24 hours.
+
+### Integrator Tips
+
+- For interactive dashboards, pull data at modest intervals (e.g., every 10–30 seconds).
+- For analytics pipelines, schedule jobs to batch fetch endpoints and deduplicate.
+- Respect cache invalidation: if you require ultra-fresh data, set `cache=false` (if supported) or call less-cached endpoints.
+```

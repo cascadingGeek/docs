@@ -1,37 +1,45 @@
 ---
 title: "Liquidity Signals"
-openapi: "GET /v1/markets/liquidity"
+description: "Access on-chain liquidity flows and TVL shifts tracked by 0xmeta"
 ---
 
-Get trending market narratives and emerging themes across crypto markets.
+## Endpoint
 
-## Overview
+https://api.0xmeta.ai/v1/markets/liquidity
 
-Track trending narratives, categories, and emerging themes by analyzing:
+### Description
 
-- Social sentiment from X (Twitter)
-- Onchain activity
-- News flow from crypto-news
+Retrieve snapshots of liquidity movements, whale transfers, and total value locked (TVL) shifts as tracked by 0xmeta’s analytics engine.
 
-## Use Cases
+### Query Parameters
 
-<CardGroup cols={2}>
-  <Card title="Trading Signals" icon="chart-line">
-    Identify trends before they go mainstream
-  </Card>
-  <Card title="Market Research" icon="magnifying-glass">
-    Track sector-specific trends
-  </Card>
-  <Card title="Portfolio Monitoring" icon="briefcase">
-    Monitor your holdings' sentiment
-  </Card>
-  <Card title="Competitive Intel" icon="shield">
-    Track competitor mentions
-  </Card>
-</CardGroup>
+| Name        | Type    | Description                                        | Default |
+| ----------- | ------- | -------------------------------------------------- | ------- |
+| `limit`     | integer | Max number of records returned                     | `10`    |
+| `timeframe` | string  | Time window for analysis (e.g., `1h`, `24h`, `7d`) | `24h`   |
 
-## Best Practices
+### Response Example
 
-<Tip>Cache responses for 5-10 minutes to avoid duplicate payments</Tip>
-
-<Warning>Longer timeframes (`7d`) may include less fresh data</Warning>
+```json
+{
+  "success": true,
+  "timeframe": "24h",
+  "liquidity_signals": [
+    {
+      "token": "$USDC",
+      "chain": "Ethereum",
+      "amount_in": 5000000,
+      "amount_out": 1200000,
+      "timestamp": 1730566890.0
+    },
+    {
+      "token": "$ETH",
+      "chain": "Base",
+      "amount_in": 13000,
+      "amount_out": 8000,
+      "timestamp": 1730566800.0
+    }
+  ],
+  "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+}
+```

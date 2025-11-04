@@ -1,33 +1,32 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: "API Reference – Introduction"
+description: "Overview of the 0xmeta API endpoints and conventions"
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+Welcome to the 0xmeta API Reference. This section covers all endpoints available, authentication (via x402 payment proof), response formats, paging, and error conventions.
 
-## Welcome
+> **Base URL**: `https://api.0xmeta.ai/v1`  
+> **Authentication**: Use header `X-Payment-Proof: YOUR_PAYMENT_PROOF`  
+> **Response format**: JSON
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
+### Common Query Parameters
 
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+- `limit` – Number of items to return (default: 10)
+- `timeframe` – Time window for analysis (e.g., `1h`, `24h`, `7d`)
+- `cursor` – For pagination if supported
 
-## Authentication
-
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+### Common Response Fields
 
 ```json
-"security": [
-  {
-    "bearerAuth": []
+{
+  "success": true,
+  "data": {
+    /* object or array */
+  },
+  "meta": {
+    "cursor": "string",
+    "limit": 10,
+    "timeframe": "24h"
   }
-]
+}
 ```

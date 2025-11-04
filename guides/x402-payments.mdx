@@ -1,0 +1,18 @@
+---
+title: "x402 Payments"
+description: "How to integrate x402 protocol for pay-per-request access"
+---
+
+## x402 Payment Protocol
+
+Every API request to 0xmeta must include a valid **payment proof** header (`X-Payment-Proof`) generated via the x402 protocol.  
+No API key is required.
+
+### Steps to Use
+
+1. Connect your wallet and sign the small transaction via x402.
+2. Receive a payment proof token.
+3. Include the token in your request header:
+   ```bash
+   curl -H "X-Payment-Proof: YOUR_PAYMENT_PROOF" https://api.0xmeta.ai/v1/markets/trends
+   ```

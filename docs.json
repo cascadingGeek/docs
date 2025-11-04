@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Market Intelligence API",
+  "name": "0xmeta Market Intelligence API",
   "colors": {
     "primary": "#0D9373",
     "light": "#07C983",
@@ -15,7 +15,7 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": ["index", "quickstart", "authentication", "pricing"]
+            "pages": ["index", "quickstart"]
           },
           {
             "group": "Core Concepts",
@@ -23,7 +23,8 @@
               "guides/x402-payments",
               "guides/caching-strategy",
               "guides/rate-limits",
-              "guides/error-handling"
+              "guides/error-handling",
+              "guides/data-architecture"
             ]
           },
           {
@@ -66,12 +67,12 @@
         },
         {
           "anchor": "Community",
-          "href": "https://x.com/0xMeta_ai",
+          "href": "https://x.com/0xmeta_ai",
           "icon": "x"
         },
         {
           "anchor": "GitHub",
-          "href": "https://github.com/0xmetaHQ/X402",
+          "href": "https://github.com/0xmetaHQ",
           "icon": "github"
         }
       ]
@@ -85,21 +86,21 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:support@your-domain.com"
+        "href": "mailto:support@0xmeta.ai"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Get API Access",
-      "href": "https://your-domain.com/dashboard"
+      "href": "https://0xmeta.ai/dashboard"
     }
   },
   "api": {
-    "baseUrl": "https://api.your-domain.com",
+    "baseUrl": "https://api.0xmeta.ai",
     "auth": {
       "method": "key",
       "name": "X-Payment-Proof",
-      "inputPrefix": "Bearer "
+      "inputPrefix": ""
     },
     "playground": {
       "mode": "show"
@@ -111,9 +112,9 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/your-handle",
-      "github": "https://github.com/your-org",
-      "linkedin": "https://linkedin.com/company/your-company"
+      "x": "https://x.com/0xmeta_ai",
+      "github": "https://github.com/0xmetaHQ",
+      "linkedin": "https://linkedin.com/company/0xmeta"
     }
   },
   "feedback": {
