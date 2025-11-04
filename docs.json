@@ -15,7 +15,7 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": ["index", "quickstart"]
+            "pages": ["overview", "index", "quickstart"]
           },
           {
             "group": "Core Concepts",
@@ -61,19 +61,9 @@
     "global": {
       "anchors": [
         {
-          "anchor": "API Playground",
-          "href": "https://docs.api.0xmeta.ai",
-          "icon": "square-terminal"
-        },
-        {
           "anchor": "Community",
           "href": "https://x.com/0xmeta_ai",
           "icon": "x"
-        },
-        {
-          "anchor": "GitHub",
-          "href": "https://github.com/0xmetaHQ",
-          "icon": "github"
         }
       ]
     }
@@ -86,14 +76,9 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:support@0xmeta.ai"
+        "href": "https://t.me/The0xMeta"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Get API Access",
-      "href": "https://0xmeta.ai/dashboard"
-    }
+    ]
   },
   "api": {
     "baseUrl": "https://api.0xmeta.ai",
