@@ -1,4 +1,84 @@
 ---
 title: "Overview"
-description: ""
+description: "Learn what 0xMeta is, why it exists, and how the facilitator model powers developer coordination on the x402 protocol."
 ---
+
+## What is 0xMeta
+
+0xMeta is the **Facilitator Infrastructure Layer** that powers how developers build services on top of the **x402 protocol**.
+
+It acts as the coordination fabric between **data**, **capital**, and **logic**, giving developers a programmable runtime to create high-level services, automations, and agents that leverage x402’s primitives.
+
+Instead of writing complex glue code or managing multiple integrations, you define your logic once — and the 0xMeta facilitator handles orchestration, state, and execution behind the scenes.
+
+:::info
+**In short:**  
+x402 provides the base protocol (accounts, liquidity, and data).  
+0xMeta provides the facilitator runtime that makes those capabilities programmable.
+:::
+
+---
+
+## Why 0xMeta Exists
+
+x402 exposes powerful protocol primitives — pools, accounts, data streams, and credit flows — but using them directly requires deep technical coordination.
+
+0xMeta abstracts that complexity by introducing a **facilitator layer** that manages:
+
+- Transaction routing and orchestration
+- Data synchronization across systems
+- Event-driven logic and trigger management
+- State persistence, retries, and job recovery
+
+Developers can focus on **what to build**, not **how to wire it together**.
+
+---
+
+## Our Approach
+
+We take a **build-to-prove** approach.  
+Instead of publishing abstract whitepapers or static documentation, we demonstrate 0xMeta’s capabilities through a series of **micro-protocols** and **facilitator-driven agents**.
+
+Each micro-protocol serves as a _live reference implementation_ showing how our facilitator infrastructure can be extended to solve specific coordination problems inside x402.
+
+These micro-protocols are designed to:
+
+- Stress-test facilitator primitives in production-like conditions
+- Expose best practices for developer integrations
+- Showcase how small, composable protocols can interoperate through the 0xMeta runtime
+- Accelerate learning by giving developers real patterns to copy, extend, or remix
+
+By building these micro-protocols and agents, we shorten the feedback loop between infrastructure design and real-world usage.  
+Developers learn by example, while the facilitator infrastructure continuously evolves through field testing.
+
+**Examples include:**
+
+- **Liquidity Routers:** small services that coordinate capital across x402 pools
+- **Signal Agents:** facilitators that respond to data events and trigger flows
+- **Credit Executors:** automations that manage risk or optimize position exposure
+
+Each of these is a working proof of how 0xMeta operates under real network conditions — showing you _how to build with it_, not just _what it can do_.
+
+---
+
+## The Facilitator Model
+
+A **facilitator** is the core runtime unit within 0xMeta.  
+It listens to events from x402, triggers actions based on defined logic, and exposes clean APIs for your services to consume.
+
+Each facilitator can:
+
+- React to x402 events or external triggers
+- Execute multi-step flows (data, AI, or capital)
+- Maintain state and ensure deterministic outcomes
+- Expose its own REST endpoints for external access
+
+```bash
+[x402 Protocol Layer]
+(Accounts | Liquidity | Data Streams)
+        ↓
+  [0xMeta Facilitator Infrastructure]
+ (Logic | Routing | State | Execution)
+        ↓
+   [Your Services / Agents]
+```
