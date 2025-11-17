@@ -1,0 +1,415 @@
+---
+title: "Error Handling"
+description: "Understanding and handling API errors"
+---
+
+## Error Response Format
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "error_code",
+    "message": "Human-readable error message",
+    "details": {
+      "additional": "context"
+    }
+  }
+}
+```
+
+## HTTP Status Codes
+
+<ResponseField name="200" type="success">
+  Success - Request completed successfully
+</ResponseField>
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid request or business logic error
+</ResponseField>
+
+<ResponseField name="401" type="error">
+  Unauthorized - Missing or invalid API key
+</ResponseField>
+
+<ResponseField name="403" type="error">
+  Forbidden - API key doesn't have required permissions
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - Resource doesn't exist
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  Conflict - Resource conflict (e.g., duplicate operation)
+</ResponseField>
+
+<ResponseField name="422" type="error">
+  Validation Error - Request data failed validation
+</ResponseField>
+
+<ResponseField name="429" type="error">
+  Rate Limited - Too many requests
+</ResponseField>
+
+<ResponseField name="500" type="error">
+  Internal Error - Something went wrong on our end
+</ResponseField>
+
+<ResponseField name="502" type="error">
+  Upstream Error - Error from upstream provider (1Shot)
+</ResponseField>
+
+<ResponseField name="504" type="error">
+  Timeout - Request took too long
+</ResponseField>
+
+## Error Codes
+
+### Client Errors (4xx)
+
+<AccordionGroup>
+  <Accordion title="invalid_request">
+    **Status**: 400
+    
+    Request data is malformed or invalid.
+    
+    ```json
+    {
+      "error": {
+        "code": "invalid_request",
+        "message": "Transaction hash must start with 0x",
+        "details": {
+          "field": "transaction_hash"
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="unauthorized">
+    **Status**: 401
+    
+    Missing or invalid API key.
+    
+    ```json
+    {
+      "error": {
+        "code": "unauthorized",
+        "message": "Invalid API key"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="not_found">
+    **Status**: 404
+    
+    Requested resource doesn't exist.
+    
+    ```json
+    {
+      "error": {
+        "code": "not_found",
+        "message": "Verification not found: ver_invalid123"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="conflict">
+    **Status**: 409
+    
+    Resource conflict or duplicate operation.
+    
+    ```json
+    {
+      "error": {
+        "code": "conflict",
+        "message": "Settlement already initiated for this verification"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="rate_limited">
+    **Status**: 429
+    
+    Rate limit exceeded.
+    
+    ```json
+    {
+      "error": {
+        "code": "rate_limited",
+        "message": "Rate limit exceeded. Max 100 requests per minute."
+      }
+    }
+    ```
+    
+    **Retry-After** header indicates when to retry.
+  </Accordion>
+
+  <Accordion title="idempotency_mismatch">
+    **Status**: 422
+    
+    Idempotency key reused with different request data.
+    
+    ```json
+    {
+      "error": {
+        "code": "idempotency_mismatch",
+        "message": "Idempotency key already used with different request data"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Business Logic Errors
+
+<AccordionGroup>
+  <Accordion title="verification_failed">
+    **Status**: 400
+    
+    Payment verification failed.
+    
+    ```json
+    {
+      "error": {
+        "code": "verification_failed",
+        "message": "Transaction amount does not match expected amount",
+        "details": {
+          "expected": "1000000000000000000",
+          "actual": "500000000000000000"
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="settlement_failed">
+    **Status**: 400
+    
+    Settlement failed or not allowed.
+    
+    ```json
+    {
+      "error": {
+        "code": "settlement_failed",
+        "message": "Cannot settle payment with status: pending",
+        "details": {
+          "verification_id": "ver_abc123",
+          "current_status": "pending"
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="insufficient_funds">
+    **Status**: 400
+    
+    Insufficient funds for settlement.
+    
+    ```json
+    {
+      "error": {
+        "code": "insufficient_funds",
+        "message": "Insufficient funds for settlement"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Server Errors (5xx)
+
+<AccordionGroup>
+  <Accordion title="internal_error">
+    **Status**: 500
+    
+    Internal server error.
+    
+    ```json
+    {
+      "error": {
+        "code": "internal_error",
+        "message": "An internal error occurred"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="upstream_error">
+    **Status**: 502
+    
+    Error from upstream provider (1Shot).
+    
+    ```json
+    {
+      "error": {
+        "code": "upstream_error",
+        "message": "Upstream service unavailable"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="timeout">
+    **Status**: 504
+    
+    Request timeout.
+    
+    ```json
+    {
+      "error": {
+        "code": "timeout",
+        "message": "Request timeout"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling Best Practices
+
+<CodeGroup>
+
+```javascript JavaScript
+async function verifyPayment(data) {
+  try {
+    const response = await fetch("https://facilitator.api.0xmeta.ai/v1/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY,
+        "Idempotency-Key": `verify_${Date.now()}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+
+    // Check for errors
+    if (!response.ok) {
+      handleError(response.status, result.error);
+      return null;
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Network error:", error);
+    throw error;
+  }
+}
+
+function handleError(status, error) {
+  switch (error.code) {
+    case "unauthorized":
+      console.error("Invalid API key");
+      break;
+
+    case "rate_limited":
+      console.error(
+        "Rate limited, retry after:",
+        response.headers.get("Retry-After")
+      );
+      break;
+
+    case "verification_failed":
+      console.error("Verification failed:", error.details);
+      break;
+
+    case "upstream_error":
+      console.error("Upstream error, retry later");
+      break;
+
+    default:
+      console.error("Error:", error.message);
+  }
+}
+```
+
+```python Python
+import requests
+import time
+
+def verify_payment(data):
+    try:
+        response = requests.post(
+            'https://facilitator.api.0xmeta.ai/v1/verify',
+            headers={
+                'Content-Type': 'application/json',
+                'X-API-Key': API_KEY,
+                'Idempotency-Key': f'verify_{int(time.time())}'
+            },
+            json=data
+        )
+
+        result = response.json()
+
+        # Check for errors
+        if not response.ok:
+            handle_error(response.status_code, result.get('error', {}))
+            return None
+
+        return result
+
+    except requests.exceptions.RequestException as e:
+        print(f'Network error: {e}')
+        raise
+
+def handle_error(status, error):
+    code = error.get('code')
+
+    if code == 'unauthorized':
+        print('Invalid API key')
+    elif code == 'rate_limited':
+        print('Rate limited, retry after:', error.get('retry_after'))
+    elif code == 'verification_failed':
+        print('Verification failed:', error.get('details'))
+    elif code == 'upstream_error':
+        print('Upstream error, retry later')
+    else:
+        print('Error:', error.get('message'))
+```
+
+</CodeGroup>
+
+## Retry Strategy
+
+For transient errors (5xx, rate limits), implement exponential backoff:
+
+```javascript
+async function retryRequest(fn, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const shouldRetry =
+        error.status >= 500 ||
+        error.status === 429 ||
+        error.code === "ETIMEDOUT";
+
+      if (!shouldRetry || attempt === maxRetries - 1) {
+        throw error;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = Math.pow(2, attempt) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Usage
+const result = await retryRequest(() => verifyPayment(data));
+```
+
+<Warning>
+  Don't retry on 4xx errors (except 429). These indicate problems with your
+  request.
+</Warning>
+
+<Tip>Use idempotency keys when retrying to prevent duplicate operations.</Tip>

@@ -1,109 +1,119 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
+  "$schema": "https://mintlify.com/schema.json",
   "theme": "mint",
-  "name": "0xmeta Market Intelligence API",
+  "name": "0xmeta.ai",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg",
+    "href": "https://0xmeta.ai"
+  },
+  "favicon": "/favicon.png",
   "colors": {
     "primary": "#0D9373",
     "light": "#07C983",
     "dark": "#0D9373"
   },
-  "favicon": "/favicon.svg",
+  "topbarLinks": [
+    {
+      "name": "API Status",
+      "url": "https://0xmeta.ai"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Dashboard",
+    "url": "https://0xmeta.ai"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    },
+    {
+      "name": "Guides",
+      "url": "guides"
+    },
+    {
+      "name": "Integration",
+      "url": "integration"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/0xmetaHQ"
+    },
+    {
+      "name": "x402 Ecosystem",
+      "icon": "link",
+      "url": "https://www.x402.org/ecosystem"
+    }
+  ],
   "navigation": {
-    "tabs": [
+    "groups": [
       {
-        "tab": "Documentation",
-        "groups": [
-          {
-            "group": "Getting Started",
-            "pages": ["overview", "index", "quickstart"]
-          },
-          {
-            "group": "Core Concepts",
-            "pages": [
-              "guides/x402-payments",
-              "guides/caching-strategy",
-              "guides/rate-limits",
-              "guides/error-handling",
-              "guides/data-architecture"
-            ]
-          },
-          {
-            "group": "Integration Guides",
-            "pages": [
-              "guides/python-integration",
-              "guides/javascript-integration",
-              "guides/response-format"
-            ]
-          }
+        "group": "Get Started",
+        "pages": ["overview", "quickstart", "pricing"]
+      },
+      {
+        "group": "API Documentation",
+        "pages": [
+          "api-reference/introduction",
+          "api-reference/verify",
+          "api-reference/settle",
+          "api-reference/status",
+          "api-reference/webhooks",
+          "api-reference/errors"
         ]
       },
       {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "Market Intelligence",
-            "pages": [
-              "api-reference/introduction",
-              "api-reference/markets/trends",
-              "api-reference/markets/liquidity",
-              "api-reference/markets/ai-agents",
-              "api-reference/markets/macro-events",
-              "api-reference/markets/proof-of-work"
-            ]
-          },
-          {
-            "group": "Utilities",
-            "pages": ["api-reference/markets/categories"]
-          }
+        "group": "Guides",
+        "pages": [
+          "guides/getting-started",
+          "guides/idempotency",
+          "guides/webhooks-setup",
+          "guides/multi-chain",
+          "guides/best-practices"
         ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Community",
-          "href": "https://x.com/0xmeta_ai",
-          "icon": "x"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/dark.svg",
-    "dark": "/logo/light.svg"
-  },
-  "navbar": {
-    "links": [
+      },
       {
-        "label": "Support",
-        "href": "https://t.me/The0xMeta"
+        "group": "Integration Examples",
+        "pages": ["integration/nodejs", "integration/python"]
+      },
+      {
+        "group": "Advanced",
+        "pages": [
+          "advanced/background-workers",
+          "advanced/rate-limiting",
+          "advanced/monitoring",
+          "advanced/production"
+        ]
+      },
+      {
+        "group": "Support",
+        "pages": ["troubleshooting", "faq"]
       }
     ]
-  },
-  "api": {
-    "baseUrl": "https://api.0xmeta.ai",
-    "auth": {
-      "method": "key",
-      "name": "X-Payment-Proof",
-      "inputPrefix": ""
-    },
-    "playground": {
-      "mode": "show"
-    }
-  },
-  "openapi": "/api-reference/openapi.json",
-  "contextual": {
-    "options": ["copy", "chatgpt", "claude", "cursor"]
   },
   "footer": {
     "socials": {
       "x": "https://x.com/0xmeta_ai",
-      "github": "https://github.com/0xmetaHQ",
-      "linkedin": "https://linkedin.com/company/0xmeta"
+      "github": "https://github.com/0xmetaHQ"
+    }
+  },
+  "api": {
+    "baseUrl": "https://facilitator.api.0xmeta.ai",
+    "auth": {
+      "method": "key",
+      "name": "X-API-Key"
+    },
+    "playground": {
+      "mode": "simple"
     }
   },
   "feedback": {
     "suggestEdit": true,
     "raiseIssue": true
-  }
+  },
+  "openapi": "openapi.json"
 }

@@ -1,0 +1,11 @@
+## Background Workers & Queue Architecture
+
+```mermaid
+flowchart LR
+    API[API Layer] --> Core[Payment Orchestrator]
+    Core --> Postgres[(PostgreSQL)]
+    Core --> Redis[(Redis Cache)]
+    Core --> Queue[(Webhook Queue)]
+    Worker --> Queue
+    Worker --> Postgres
+```

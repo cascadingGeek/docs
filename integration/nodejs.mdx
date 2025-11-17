@@ -1,0 +1,520 @@
+---
+title: "Node.js Integration"
+description: "Complete guide to integrating 0xmeta.ai with Node.js"
+---
+
+## Installation
+
+Install the required dependencies:
+
+```bash npm
+npm install axios
+# or
+npm install node-fetch
+```
+
+<Note>
+  This guide uses the native `fetch` API available in Node.js 18+. For older
+  versions, use `node-fetch` or `axios`.
+</Note>
+
+## Setup
+
+Create a new file `0xmeta.js` to encapsulate the API client:
+
+```javascript
+const API_BASE_URL = 'https://facilitator.api.0xmeta.ai/v1';
+const API_KEY = process.env.0XMETA_API_KEY;
+
+class ZeroXMetaClient {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.baseUrl = API_BASE_URL;
+  }
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-API-Key': this.apiKey,
+      ...options.headers,
+    };
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  async verifyPayment(params) {
+    const idempotencyKey = params.idempotencyKey || `verify_${Date.now()}`;
+
+    return this.request('/verify', {
+      method: 'POST',
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        transaction_hash: params.transactionHash,
+        chain: params.chain,
+        seller_address: params.sellerAddress,
+        expected_amount: params.expectedAmount,
+        expected_token: params.expectedToken || null,
+        metadata: params.metadata,
+        webhook_url: params.webhookUrl,
+      }),
+    });
+  }
+
+  async settlePayment(params) {
+    const idempotencyKey = params.idempotencyKey || `settle_${Date.now()}`;
+
+    return this.request('/settle', {
+      method: 'POST',
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        verification_id: params.verificationId,
+        destination_address: params.destinationAddress,
+        amount: params.amount || null,
+        metadata: params.metadata,
+      }),
+    });
+  }
+
+  async getVerificationStatus(verificationId) {
+    return this.request(`/verifications/${verificationId}`);
+  }
+
+  async getSettlementStatus(settlementId) {
+    return this.request(`/settlements/${settlementId}`);
+  }
+}
+
+module.exports = ZeroXMetaClient;
+```
+
+## Basic Usage
+
+### Verify a Payment
+
+```javascript
+const ZeroXMetaClient = require('./0xmeta');
+
+const client = new ZeroXMetaClient(process.env.0XMETA_API_KEY);
+
+async function verifyPayment() {
+  try {
+    const result = await client.verifyPayment({
+      transactionHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      chain: 'base',
+      sellerAddress: '0x742d35cc6634c0532925a3b844bc9e7595f0beb0',
+      expectedAmount: '1000000000000000000', // 1 ETH in wei
+      expectedToken: null, // null for native token
+      metadata: {
+        order_id: 'ORDER-123',
+        customer_id: 'CUST-456',
+      },
+      webhookUrl: 'https://your-app.com/webhooks/settlement',
+      idempotencyKey: 'verify_ORDER-123_1234567890',
+    });
+
+    console.log('Verification ID:', result.verification_id);
+    console.log('Status:', result.status);
+
+    return result;
+  } catch (error) {
+    console.error('Verification failed:', error.message);
+    throw error;
+  }
+}
+
+verifyPayment();
+```
+
+### Settle a Payment
+
+```javascript
+async function settlePayment(verificationId) {
+  try {
+    const result = await client.settlePayment({
+      verificationId: verificationId,
+      destinationAddress: "0x742d35cc6634c0532925a3b844bc9e7595f0beb0",
+      amount: null, // null to settle full amount
+      metadata: {
+        payout_id: "PAYOUT-789",
+      },
+      idempotencyKey: `settle_${verificationId}_${Date.now()}`,
+    });
+
+    console.log("Settlement ID:", result.settlement_id);
+    console.log("Status:", result.status);
+
+    return result;
+  } catch (error) {
+    console.error("Settlement failed:", error.message);
+    throw error;
+  }
+}
+```
+
+## Express.js Integration
+
+### Complete Express Route Example
+
+```javascript
+const express = require('express');
+const ZeroXMetaClient = require('./0xmeta');
+
+const app = express();
+app.use(express.json());
+
+const client = new ZeroXMetaClient(process.env.0XMETA_API_KEY);
+
+// Verify payment endpoint
+app.post('/api/payments/verify', async (req, res) => {
+  try {
+    const {
+      transaction_hash,
+      chain,
+      seller_address,
+      expected_amount,
+      expected_token,
+      order_id,
+    } = req.body;
+
+    const verification = await client.verifyPayment({
+      transactionHash: transaction_hash,
+      chain,
+      sellerAddress: seller_address,
+      expectedAmount: expected_amount,
+      expectedToken: expected_token || null,
+      metadata: { order_id },
+      webhookUrl: `${req.protocol}://${req.get('host')}/webhooks/settlement`,
+      idempotencyKey: `verify_${order_id}_${Date.now()}`,
+    });
+
+    res.json({
+      success: true,
+      verification_id: verification.verification_id,
+      status: verification.status,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Settle payment endpoint
+app.post('/api/payments/settle', async (req, res) => {
+  try {
+    const { verification_id, destination_address } = req.body;
+
+    const settlement = await client.settlePayment({
+      verificationId: verification_id,
+      destinationAddress: destination_address,
+      idempotencyKey: `settle_${verification_id}_${Date.now()}`,
+    });
+
+    res.json({
+      success: true,
+      settlement_id: settlement.settlement_id,
+      status: settlement.status,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Webhook handler
+app.post('/webhooks/settlement', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const signature = req.headers['x-signature'];
+    // Verify webhook signature here (see webhooks guide)
+
+    const payload = JSON.parse(req.body);
+
+    if (payload.type === 'settlement.completed') {
+      const { settlement_id, verification_id, status } = payload.data;
+
+      // Update your database
+      await updateSettlementStatus(settlement_id, status);
+
+      console.log(`Settlement ${settlement_id} completed`);
+    }
+
+    res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Server running on port 3000');
+});
+```
+
+## Error Handling
+
+```javascript
+class ZeroXMetaError extends Error {
+  constructor(message, code, details) {
+    super(message);
+    this.name = 'ZeroXMetaError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
+// Enhanced request method with error handling
+async request(endpoint, options = {}) {
+  try {
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': this.apiKey,
+        ...options.headers,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new ZeroXMetaError(
+        data.error?.message || `HTTP ${response.status}`,
+        data.error?.code || 'unknown_error',
+        data.error?.details
+      );
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof ZeroXMetaError) {
+      throw error;
+    }
+    throw new ZeroXMetaError(
+      error.message,
+      'network_error',
+      { originalError: error.message }
+    );
+  }
+}
+
+// Usage with error handling
+try {
+  const result = await client.verifyPayment({...});
+} catch (error) {
+  if (error instanceof ZeroXMetaError) {
+    switch (error.code) {
+      case 'verification_failed':
+        console.error('Payment verification failed:', error.details);
+        break;
+      case 'invalid_request':
+        console.error('Invalid request:', error.details);
+        break;
+      default:
+        console.error('API error:', error.message);
+    }
+  } else {
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+## Polling for Status
+
+```javascript
+async function waitForSettlement(settlementId, maxAttempts = 60) {
+  const initialDelay = 5000; // 5 seconds
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const settlement = await client.getSettlementStatus(settlementId);
+
+    if (settlement.status === 'settled' || settlement.status === 'failed') {
+      return settlement;
+    }
+
+    // Exponential backoff
+    const delay = initialDelay * Math.pow(2, Math.min(attempt, 5));
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  throw new Error('Settlement timeout');
+}
+
+// Usage
+const settlement = await client.settlePayment({...});
+const completed = await waitForSettlement(settlement.settlement_id);
+console.log('Settlement completed:', completed);
+```
+
+## TypeScript Support
+
+```typescript
+interface VerifyPaymentParams {
+  transactionHash: string;
+  chain: "base" | "base-sepolia";
+  sellerAddress: string;
+  expectedAmount: string;
+  expectedToken?: string | null;
+  metadata?: Record<string, any>;
+  webhookUrl?: string;
+  idempotencyKey?: string;
+}
+
+interface VerifyPaymentResponse {
+  verification_id: string;
+  status: "verified" | "pending" | "failed" | "rejected";
+  transaction_hash: string;
+  chain: string;
+  verified_amount: string | null;
+  verified_token: string | null;
+  verified_at: string | null;
+  details: {
+    confirmations?: number;
+    block_number?: number;
+    gas_used?: string;
+  };
+}
+
+interface SettlePaymentParams {
+  verificationId: string;
+  destinationAddress: string;
+  amount?: string | null;
+  metadata?: Record<string, any>;
+  idempotencyKey?: string;
+}
+
+interface SettlePaymentResponse {
+  settlement_id: string;
+  verification_id: string;
+  status: "pending" | "settled" | "failed" | "rejected";
+  settlement_tx_hash: string | null;
+  settled_amount: string | null;
+  settled_at: string | null;
+  details: {
+    estimated_time?: number;
+    fee?: string;
+    gas_used?: string;
+  };
+}
+
+class ZeroXMetaClient {
+  constructor(private apiKey: string) {}
+
+  async verifyPayment(
+    params: VerifyPaymentParams
+  ): Promise<VerifyPaymentResponse> {
+    // Implementation...
+  }
+
+  async settlePayment(
+    params: SettlePaymentParams
+  ): Promise<SettlePaymentResponse> {
+    // Implementation...
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables">
+    ```javascript
+    // .env
+    0XMETA_API_KEY=your_api_key_here
+    
+    // In your code
+    require('dotenv').config();
+    const client = new ZeroXMetaClient(process.env.0XMETA_API_KEY);
+    ```
+  </Accordion>
+
+  <Accordion title="Implement Idempotency">
+    ```javascript
+    // Store idempotency keys in your database
+    const idempotencyKey = `verify_${orderId}_${timestamp}`;
+    
+    // Check if already processed
+    const existing = await db.findVerification(idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+    
+    const result = await client.verifyPayment({
+      ...params,
+      idempotencyKey,
+    });
+    
+    await db.saveVerification(idempotencyKey, result);
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Webhooks Securely">
+    ```javascript
+    const crypto = require('crypto');
+    
+    function verifyWebhookSignature(payload, signature, secret) {
+      const hmac = crypto.createHmac('sha256', secret);
+      const digest = hmac.update(payload).digest('hex');
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(digest)
+      );
+    }
+    
+    app.post('/webhooks/settlement', (req, res) => {
+      const signature = req.headers['x-signature'];
+      const isValid = verifyWebhookSignature(req.body, signature, WEBHOOK_SECRET);
+      
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+      // Process webhook...
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Use Async/Await with Try-Catch">
+    ```javascript
+    // Good
+    try {
+      const result = await client.verifyPayment(params);
+      // Handle success
+    } catch (error) {
+      // Handle error
+    }
+    
+    // Avoid
+    client.verifyPayment(params)
+      .then(result => { /* ... */ })
+      .catch(error => { /* ... */ });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+  For production applications, consider using a library like `axios` with retry
+  logic and request interceptors for better error handling.
+</Info>
+
+<Tip>
+  Always use webhooks instead of polling for settlement status updates. It's
+  more efficient and provides instant notifications.
+</Tip>

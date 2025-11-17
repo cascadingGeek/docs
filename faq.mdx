@@ -1,0 +1,55 @@
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Do I need an account to use 0xmeta.ai?">
+    **No!** Just start making API requests. No signup, no API keys needed.
+  </Accordion>
+
+{" "}
+<Accordion title="How do you charge fees without an account?">
+  Fees are automatically deducted during settlement. We receive the settlement
+  fee, and you receive the remainder.
+</Accordion>
+
+{" "}
+<Accordion title="Can I avoid the settlement fee?">
+  No - the 0.5% fee is how we provide the service. However, it's much lower than
+  traditional payment processors (2.9% + $0.30).
+</Accordion>
+
+{" "}
+<Accordion title="What if settlement fails?">
+  If settlement fails, you pay **$0**. Fees are only charged on successful
+  settlements.
+</Accordion>
+
+{" "}
+<Accordion title="Are there refunds?">
+  Since blockchain transactions are final and we only charge on success, refunds
+  aren't applicable. If you have an issue, contact support.
+</Accordion>
+
+  <Accordion title="Do you support custom pricing for enterprises?">
+    Yes! For 10,000+ settlements per month, contact sales@0xmeta.ai for custom rates.
+  </Accordion>
+</AccordionGroup>
+
+## Get Started
+
+No signup required - just start building:
+
+```bash
+curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction_hash": "0x...",
+    "chain": "base",
+    "seller_address": "0x...",
+    "expected_amount": "1000000000000000000"
+  }'
+```
+
+<Info>
+  Start with zero fees during verification. Only pay 0.5% when you successfully
+  settle.
+</Info>

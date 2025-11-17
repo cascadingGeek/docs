@@ -1,0 +1,479 @@
+---
+title: "Postman Integration"
+description: "Complete guide to using 0xmeta.ai API with Postman"
+---
+
+## Setup
+
+### Import the Collection
+
+1. Download the 0xmeta.ai Postman Collection
+2. Open Postman and click **Import**
+3. Select the collection file or paste the collection JSON
+4. Configure your environment variables
+
+### Environment Variables
+
+Create a new environment in Postman with the following variables:
+
+| Variable           | Initial Value                          | Current Value                          | Description                               |
+| ------------------ | -------------------------------------- | -------------------------------------- | ----------------------------------------- |
+| `base_url`         | `https://facilitator.api.0xmeta.ai/v1` | `https://facilitator.api.0xmeta.ai/v1` | API base URL                              |
+| `api_key`          | `your_api_key_here`                    | `your_api_key_here`                    | Your API key                              |
+| `transaction_hash` | `0x...`                                | `0x...`                                | Transaction hash to verify                |
+| `chain`            | `base`                                 | `base`                                 | Blockchain network (base or base-sepolia) |
+| `seller_address`   | `0x...`                                | `0x...`                                | Seller's wallet address                   |
+| `expected_amount`  | `1000000000000000000`                  | `1000000000000000000`                  | Expected amount in wei                    |
+| `verification_id`  |                                        |                                        | Verification ID (auto-set)                |
+| `settlement_id`    |                                        |                                        | Settlement ID (auto-set)                  |
+
+<Note>
+  Set your `api_key` in the environment variables before making requests.
+</Note>
+
+## Verify Payment
+
+### Request Setup
+
+**Method:** `POST`  
+**URL:** `{{base_url}}/verify`
+
+**Headers:**
+
+```
+Content-Type: application/json
+X-API-Key: {{api_key}}
+Idempotency-Key: verify_{{$timestamp}}
+```
+
+**Body (JSON):**
+
+```json
+{
+  "transaction_hash": "{{transaction_hash}}",
+  "chain": "{{chain}}",
+  "seller_address": "{{seller_address}}",
+  "expected_amount": "{{expected_amount}}",
+  "expected_token": null,
+  "metadata": {
+    "order_id": "ORDER-123",
+    "customer_id": "CUST-456"
+  },
+  "webhook_url": "https://your-app.com/webhooks/settlement"
+}
+```
+
+### Test Script
+
+Add this to the **Tests** tab to automatically save the verification ID:
+
+```javascript
+if (pm.response.code === 200) {
+  const response = pm.response.json();
+
+  // Save verification_id to environment
+  pm.environment.set("verification_id", response.verification_id);
+
+  // Log success
+  console.log("Verification ID:", response.verification_id);
+  console.log("Status:", response.status);
+
+  // Test assertions
+  pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+  });
+
+  pm.test("Response has verification_id", function () {
+    pm.expect(response).to.have.property("verification_id");
+  });
+
+  pm.test("Status is verified or pending", function () {
+    pm.expect(["verified", "pending"]).to.include(response.status);
+  });
+} else {
+  // Log error
+  const error = pm.response.json();
+  console.error("Error:", error.error?.message);
+}
+```
+
+## Settle Payment
+
+### Request Setup
+
+**Method:** `POST`  
+**URL:** `{{base_url}}/settle`
+
+**Headers:**
+
+```
+Content-Type: application/json
+X-API-Key: {{api_key}}
+Idempotency-Key: settle_{{verification_id}}_{{$timestamp}}
+```
+
+**Body (JSON):**
+
+```json
+{
+  "verification_id": "{{verification_id}}",
+  "destination_address": "{{seller_address}}",
+  "amount": null,
+  "metadata": {
+    "payout_id": "PAYOUT-789"
+  }
+}
+```
+
+### Test Script
+
+```javascript
+if (pm.response.code === 200) {
+  const response = pm.response.json();
+
+  // Save settlement_id to environment
+  pm.environment.set("settlement_id", response.settlement_id);
+
+  // Log success
+  console.log("Settlement ID:", response.settlement_id);
+  console.log("Status:", response.status);
+
+  // Test assertions
+  pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+  });
+
+  pm.test("Response has settlement_id", function () {
+    pm.expect(response).to.have.property("settlement_id");
+  });
+
+  pm.test("Status is pending or settled", function () {
+    pm.expect(["pending", "settled"]).to.include(response.status);
+  });
+} else {
+  const error = pm.response.json();
+  console.error("Error:", error.error?.message);
+}
+```
+
+## Get Verification Status
+
+### Request Setup
+
+**Method:** `GET`  
+**URL:** `{{base_url}}/verifications/{{verification_id}}`
+
+**Headers:**
+
+```
+X-API-Key: {{api_key}}
+```
+
+### Test Script
+
+```javascript
+if (pm.response.code === 200) {
+  const response = pm.response.json();
+
+  console.log("Verification Status:", response.status);
+  console.log("Transaction Hash:", response.transaction_hash);
+
+  pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+  });
+
+  pm.test("Response has status", function () {
+    pm.expect(response).to.have.property("status");
+  });
+}
+```
+
+## Get Settlement Status
+
+### Request Setup
+
+**Method:** `GET`  
+**URL:** `{{base_url}}/settlements/{{settlement_id}}`
+
+**Headers:**
+
+```
+X-API-Key: {{api_key}}
+```
+
+### Test Script
+
+```javascript
+if (pm.response.code === 200) {
+  const response = pm.response.json();
+
+  console.log("Settlement Status:", response.status);
+
+  if (response.status === "settled") {
+    console.log("Settlement TX Hash:", response.settlement_tx_hash);
+    console.log("Settled Amount:", response.settled_amount);
+    console.log("Settled At:", response.settled_at);
+  }
+
+  pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+  });
+}
+```
+
+## Complete Collection Structure
+
+### Collection Organization
+
+```
+0xmeta.ai API
+├── Authentication
+│   └── Set API Key (Pre-request Script)
+├── Verification
+│   ├── Verify Payment
+│   └── Get Verification Status
+├── Settlement
+│   ├── Settle Payment
+│   └── Get Settlement Status
+└── Webhooks
+    └── Webhook Test Endpoint
+```
+
+### Pre-request Scripts
+
+Add this to your collection's **Pre-request Script** tab to automatically generate idempotency keys:
+
+```javascript
+// Generate idempotency key for verify requests
+if (pm.request.url.toString().includes("/verify")) {
+  const timestamp = Date.now();
+  pm.request.headers.add({
+    key: "Idempotency-Key",
+    value: `verify_${timestamp}`,
+  });
+}
+
+// Generate idempotency key for settle requests
+if (pm.request.url.toString().includes("/settle")) {
+  const verificationId = pm.environment.get("verification_id") || "unknown";
+  const timestamp = Date.now();
+  pm.request.headers.add({
+    key: "Idempotency-Key",
+    value: `settle_${verificationId}_${timestamp}`,
+  });
+}
+```
+
+## Example Workflows
+
+### Workflow 1: Verify and Settle Payment
+
+<Steps>
+  <Step title="Set Environment Variables">
+    Set `transaction_hash`, `chain`, `seller_address`, and `expected_amount` in your environment.
+  </Step>
+
+{" "}
+
+<Step title="Verify Payment">
+  Run the "Verify Payment" request. The verification_id will be automatically
+  saved.
+</Step>
+
+{" "}
+
+<Step title="Check Verification Status">
+  Optionally run "Get Verification Status" to confirm the verification
+  completed.
+</Step>
+
+{" "}
+
+<Step title="Settle Payment">
+  Run the "Settle Payment" request using the saved verification_id.
+</Step>
+
+  <Step title="Check Settlement Status">
+    Run "Get Settlement Status" to monitor the settlement progress.
+  </Step>
+</Steps>
+
+### Workflow 2: Testing Different Chains
+
+Create a collection variable for chains and iterate:
+
+```javascript
+// Pre-request script for chain testing
+const chains = ["base", "base-sepolia"];
+const currentChain = pm.collectionVariables.get("current_chain_index") || 0;
+
+if (currentChain < chains.length) {
+  pm.environment.set("chain", chains[currentChain]);
+  pm.collectionVariables.set("current_chain_index", currentChain + 1);
+} else {
+  pm.collectionVariables.set("current_chain_index", 0);
+}
+```
+
+## Advanced Features
+
+### Dynamic Variables
+
+Use Postman's dynamic variables in your requests:
+
+```json
+{
+  "transaction_hash": "{{$randomHex}}",
+  "chain": "{{chain}}",
+  "seller_address": "{{$randomWalletAddress}}",
+  "expected_amount": "{{$randomInt}}"
+}
+```
+
+### Collection Runner
+
+Use the Collection Runner to test multiple scenarios:
+
+1. Create a CSV file with test data:
+
+```csv
+transaction_hash,chain,seller_address,expected_amount
+0xabc...,base,0x123...,1000000000000000000
+0xdef...,base-sepolia,0x456...,2000000000000000000
+```
+
+2. Import the CSV in Collection Runner
+3. Map columns to environment variables
+4. Run the collection
+
+### Mock Servers
+
+Create a mock server for testing:
+
+1. Create a new mock server
+2. Add example responses:
+
+```json
+{
+  "verification_id": "ver_mock123",
+  "status": "verified",
+  "transaction_hash": "0x...",
+  "chain": "base",
+  "verified_amount": "1000000000000000000"
+}
+```
+
+3. Use the mock server URL in your environment for testing
+
+## Error Handling
+
+### Test Script for Error Responses
+
+```javascript
+// Handle error responses
+if (pm.response.code >= 400) {
+  const error = pm.response.json();
+
+  console.error("Error Code:", error.error?.code);
+  console.error("Error Message:", error.error?.message);
+  console.error("Error Details:", error.error?.details);
+
+  // Test error structure
+  pm.test("Error response has error object", function () {
+    pm.expect(error).to.have.property("error");
+  });
+
+  pm.test("Error has code", function () {
+    pm.expect(error.error).to.have.property("code");
+  });
+
+  pm.test("Error has message", function () {
+    pm.expect(error.error).to.have.property("message");
+  });
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables">
+    Never hardcode API keys or sensitive data. Always use environment variables:
+    
+    ```json
+    {
+      "X-API-Key": "{{api_key}}"
+    }
+    ```
+  </Accordion>
+
+{" "}
+
+<Accordion title="Save Response Data">
+  Use test scripts to automatically save IDs and status values: ```javascript
+  pm.environment.set("verification_id", response.verification_id); ```
+</Accordion>
+
+  <Accordion title="Add Assertions">
+    Always add test assertions to verify responses:
+    
+    ```javascript
+    pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Use Pre-request Scripts">
+    Automate repetitive tasks like generating idempotency keys:
+    
+    ```javascript
+    pm.request.headers.add({
+        key: 'Idempotency-Key',
+        value: `verify_${Date.now()}`
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Organize with Folders">
+    Group related requests in folders for better organization:
+    
+    - Authentication
+    - Verification
+    - Settlement
+    - Status Checks
+  </Accordion>
+</AccordionGroup>
+
+## Export Collection
+
+### Share Your Collection
+
+1. Click on your collection
+2. Select **...** (three dots)
+3. Choose **Export**
+4. Select **Collection v2.1**
+5. Save and share the JSON file
+
+### Import in Team Workspace
+
+1. Go to your team workspace
+2. Click **Import**
+3. Upload the collection JSON
+4. Share environment variables separately (never commit API keys)
+
+<Warning>
+  Never commit API keys or sensitive data to version control. Use environment
+  variables and share them securely with your team.
+</Warning>
+
+<Info>
+  Postman also supports Newman (CLI) for running collections in CI/CD pipelines.
+  Check the [Newman
+  documentation](https://learning.postman.com/docs/running-collections/using-newman-cli/command-line-integration-with-newman/)
+  for more details.
+</Info>
+
+<Tip>
+  Use Postman's built-in code generator to convert requests to code snippets in
+  various languages (JavaScript, Python, cURL, etc.).
+</Tip>
