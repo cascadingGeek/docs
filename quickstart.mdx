@@ -1,83 +1,422 @@
 ---
 title: "Quickstart"
-description: "Get started with 0xmeta.ai in under 5 minutes"
+description: "Get started with 0xmeta.ai in under 5 minutes - no signup required!"
 ---
 
-## Setup your account
+## 🚀 Start Building Immediately
+
+0xmeta.ai requires **zero setup**. No account creation, no API keys, no configuration files.
+
+Just start making requests to accept x402 payments on Base network!
+
+<Note>
+  **Truly permissionless**: You can verify and settle payments without any
+  authentication. Just call our API endpoints.
+</Note>
+
+---
+
+## Step 1: Verify a Payment
+
+When a customer makes a payment, verify it on-chain:
+
+```bash
+curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction_hash": "0x1234567890abcdef...",
+    "chain": "base",
+    "seller_address": "0xYourWalletAddress",
+    "expected_amount": "1000000",
+    "expected_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }'
+```
+
+<Tip>
+  The `expected_token` is USDC on Base:
+  `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+</Tip>
+
+### Response
+
+```json
+{
+  "verification_id": "vrf_abc123xyz",
+  "status": "verified",
+  "transaction_hash": "0x1234567890abcdef...",
+  "chain": "base",
+  "verified_amount": "1000000",
+  "verified_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "seller_address": "0xYourWalletAddress",
+  "verified_at": "2025-01-15T10:30:00Z"
+}
+```
+
+<Check>**Verification is FREE** - no fees charged for verifying payments</Check>
+
+---
+
+## Step 2: Settle the Payment
+
+Use the `verification_id` to settle and receive funds:
+
+```bash
+curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
+  -H "Content-Type: application/json" \
+  -d '{
+    "verification_id": "vrf_abc123xyz",
+    "destination_address": "0xYourWalletAddress",
+    "payment_payload": {
+      "from": "0xCustomerAddress",
+      "validBefore": 1735689600,
+      "validAfter": 0,
+      "nonce": "0x...",
+      "v": 28,
+      "r": "0x...",
+      "s": "0x..."
+    }
+  }'
+```
+
+### Response
+
+```json
+{
+  "settlement_id": "stl_def456uvw",
+  "verification_id": "vrf_abc123xyz",
+  "status": "pending",
+  "transaction_hash": "0xabcdef1234567890...",
+  "destination_address": "0xYourWalletAddress",
+  "fee_info": {
+    "fee_amount_usd": 7.5,
+    "fee_percentage": 0.75,
+    "net_amount_usd": 992.5,
+    "rate": 0.75,
+    "settlement_method": "smart_contract",
+    "contract_address": "0xSettlementSplitterAddress"
+  },
+  "created_at": "2025-01-15T10:31:00Z"
+}
+```
+
+<Info>
+  **Settlement Fee**: 0.75% (minimum $1) is automatically deducted by our smart
+  contract. You receive the net amount directly to your wallet.
+</Info>
+
+---
+
+## Step 3: Check Settlement Status
+
+Monitor settlement progress:
+
+```bash
+curl https://facilitator.api.0xmeta.ai/v1/settlements/stl_def456uvw
+```
+
+### Response
+
+```json
+{
+  "id": "stl_def456uvw",
+  "type": "settlement",
+  "status": "settled",
+  "transaction_hash": "0xabcdef1234567890...",
+  "created_at": "2025-01-15T10:31:00Z",
+  "settled_at": "2025-01-15T10:32:15Z",
+  "details": {
+    "verification_id": "vrf_abc123xyz",
+    "destination_address": "0xYourWalletAddress",
+    "settled_amount": "1000000",
+    "fee_amount_usd": 7.5,
+    "net_amount_usd": 992.5,
+    "fee_collection_status": "collected"
+  }
+}
+```
+
+<Check>Settlements typically complete in **1-5 minutes** on Base network</Check>
+
+---
+
+## Optional: Set Up Webhooks
+
+Receive real-time notifications when settlements complete:
+
+```bash
+curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction_hash": "0x...",
+    "chain": "base",
+    "seller_address": "0xYourWalletAddress",
+    "expected_amount": "1000000",
+    "webhook_url": "https://yourdomain.com/webhooks/settlement"
+  }'
+```
+
+### Webhook Payload
+
+When settlement completes, you'll receive:
+
+```json
+{
+  "event": "settlement.completed",
+  "settlement_id": "stl_def456uvw",
+  "verification_id": "vrf_abc123xyz",
+  "transaction_hash": "0xabcdef1234567890...",
+  "status": "settled",
+  "amount": 1000000,
+  "currency": "USDC",
+  "fee_info": {
+    "fee_amount_usd": 7.5,
+    "net_amount_usd": 992.5,
+    "rate": 0.75
+  },
+  "destination_address": "0xYourWalletAddress",
+  "settled_at": "2025-01-15T10:32:15Z"
+}
+```
+
+<Warning>
+  Verify webhook signatures using our HMAC validation to ensure authenticity.
+  See [Webhook Security](/guides/webhooks-setup)
+</Warning>
+
+---
+
+## Understanding the Flow
+
+Here's what happens when you use 0xmeta.ai:
 
 <Steps>
-  <Step title="Get your API Key">
-    Sign up at [dashboard.0xmeta.ai](https://dashboard.0xmeta.ai) to get your API key.
-    
-    <Note>
-      For testing, you can use the demo API key: `test_key_1234567890`
-    </Note>
+  <Step title="Customer Authorizes Payment">
+    Customer signs an EIP-3009 authorization on the client side. This
+    authorization is directed to our **SettlementSplitter smart contract** (not
+    directly to you).
   </Step>
 
-  <Step title="Make your first request">
-    Use your API key to verify a payment:
-```bash
-    curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
-      -H "Content-Type: application/json" \
-      -H "X-API-Key: your_api_key" \
-      -d '{
-        "transaction_hash": "0x...",
-        "chain": "base",
-        "seller_address": "0x...",
-        "expected_amount": "1000000000000000000"
-      }'
-```
-
-    <Tip>
-      Use the `Idempotency-Key` header to prevent duplicate requests
-    </Tip>
-
+  <Step title="You Verify the Payment">
+    Call `/v1/verify` to confirm the transaction is valid and the authorization
+    is properly signed. This is **free** and instant.
   </Step>
 
-  <Step title="Handle the response">
-    You'll receive a verification response:
-```json
-    {
-      "verification_id": "ver_abc123",
-      "status": "verified",
-      "transaction_hash": "0x...",
-      "chain": "base",
-      "verified_amount": "1000000000000000000",
-      "verified_at": "2025-01-15T10:30:00Z"
-    }
-```
-
-    Save the `verification_id` for settlement.
-
+  <Step title="You Initiate Settlement">
+    Call `/v1/settle` with the EIP-3009 signature. Our backend communicates with
+    the 1Shot API to execute the smart contract.
   </Step>
 
-  <Step title="Settle the payment">
-    Use the verification_id to initiate settlement:
-```bash
-    curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
-      -H "Content-Type: application/json" \
-      -H "X-API-Key: your_api_key" \
-      -d '{
-        "verification_id": "ver_abc123",
-        "destination_address": "0x..."
-      }'
-```
+  <Step title="Smart Contract Splits Funds">
+    The SettlementSplitter contract: 1. Receives the full payment from the
+    customer 2. Calculates 0.75% fee (minimum $1) 3. Sends fee to 0xmeta
+    treasury 4. Sends remaining 99.25% to your address. All in **one atomic
+    transaction**.
+  </Step>
+
+  <Step title="You Receive Funds">
+    Your wallet receives the net amount (after fees) in 1-5 minutes. Check
+    BaseScan to see both transfers on-chain.
   </Step>
 </Steps>
+
+---
+
+## No Authentication Required
+
+<CardGroup cols={2}>
+  <Card title="No Signup" icon="user-slash">
+    Start using the API immediately without creating an account
+  </Card>
+
+  <Card title="No API Keys" icon="key-slash">
+    All endpoints are publicly accessible - no authentication needed
+  </Card>
+
+  <Card title="No Rate Limits" icon="infinity">
+    Use as much as you need without quotas or throttling
+  </Card>
+
+  <Card title="No Lock-In" icon="unlock">
+    No accounts means no platform lock-in or restrictions
+  </Card>
+</CardGroup>
+
+<Note>
+  **Why no authentication?** We believe payment facilitation should be as
+  permissionless as the blockchain itself. Anyone should be able to accept
+  payments without barriers.
+</Note>
+
+---
+
+## Fee Estimation
+
+Want to know fees before settling? Use our estimation endpoint:
+
+```bash
+curl "https://facilitator.api.0xmeta.ai/v1/pricing/estimate?amount=1000&chain=base"
+```
+
+### Response
+
+```json
+{
+  "amount_usd": 1000.0,
+  "fee_amount_usd": 7.5,
+  "fee_percentage": 0.75,
+  "net_amount_usd": 992.5,
+  "minimum_fee_applied": false,
+  "chain": "base"
+}
+```
+
+---
+
+## Idempotency
+
+Prevent duplicate settlements by using idempotency keys:
+
+```bash
+curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: unique-key-12345" \
+  -d '{
+    "verification_id": "vrf_abc123xyz",
+    "destination_address": "0xYourWalletAddress"
+  }'
+```
+
+If you retry the same request with the same idempotency key, you'll receive the original response instead of creating a duplicate settlement.
+
+<Tip>Use UUIDs or transaction hashes as idempotency keys</Tip>
+
+---
+
+## Supported Networks
+
+Currently, we support:
+
+| Network      | Chain ID | Status        |
+| ------------ | -------- | ------------- |
+| Base Mainnet | 8453     | ✅ Production |
+| Base Sepolia | 84532    | ✅ Testing    |
+
+<Note>More networks coming soon! Follow our [roadmap](/resources/roadmap)</Note>
+
+---
+
+## Example: Complete Integration
+
+Here's a complete TypeScript example:
+
+```typescript
+// 1. Verify payment
+const verifyResponse = await fetch(
+  "https://facilitator.api.0xmeta.ai/v1/verify",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      transaction_hash: "0x...",
+      chain: "base",
+      seller_address: "0xYourAddress",
+      expected_amount: "1000000", // 1 USDC
+      expected_token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    }),
+  }
+);
+
+const { verification_id } = await verifyResponse.json();
+
+// 2. Settle payment
+const settleResponse = await fetch(
+  "https://facilitator.api.0xmeta.ai/v1/settle",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": `settlement-${Date.now()}`,
+    },
+    body: JSON.stringify({
+      verification_id,
+      destination_address: "0xYourAddress",
+      payment_payload: {
+        from: customerAddress,
+        validBefore: Math.floor(Date.now() / 1000) + 3600,
+        validAfter: 0,
+        nonce: "0x...",
+        v,
+        r,
+        s, // From customer's EIP-3009 signature
+      },
+    }),
+  }
+);
+
+const settlement = await settleResponse.json();
+
+// 3. Check status
+const statusResponse = await fetch(
+  `https://facilitator.api.0xmeta.ai/v1/settlements/${settlement.settlement_id}`
+);
+
+const status = await statusResponse.json();
+console.log("Settlement status:", status.status);
+console.log("You receive:", status.details.net_amount_usd);
+```
+
+---
 
 ## What's Next?
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/api-reference/authentication">
-    Learn about API key management
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Complete API documentation
   </Card>
-  <Card title="Idempotency" icon="arrows-rotate" href="/guides/idempotency">
-    Prevent duplicate operations
-  </Card>
-  <Card title="Webhooks" icon="webhook" href="/guides/webhooks-setup">
+
+  <Card title="Webhooks Setup" icon="webhook" href="/guides/webhooks-setup">
     Set up real-time notifications
   </Card>
+
+  <Card title="Pricing Details" icon="dollar-sign" href="/pricing">
+    Learn about fees and smart contract splits
+  </Card>
+
   <Card title="Best Practices" icon="lightbulb" href="/guides/best-practices">
     Production tips and tricks
   </Card>
 </CardGroup>
+
+---
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card title="Join Discord" icon="discord" href="https://discord.gg/0xmeta">
+    Get help from our community
+  </Card>
+
+  <Card
+    title="View Examples"
+    icon="code"
+    href="https://github.com/0xmeta/examples"
+  >
+    Check out code examples
+  </Card>
+
+  <Card
+    title="Smart Contract"
+    icon="file-contract"
+    href="https://github.com/0xmeta/contracts"
+  >
+    View our open-source contracts
+  </Card>
+
+  <Card title="Contact Support" icon="envelope" href="mailto:support@0xmeta.ai">
+    Email us your questions
+  </Card>
+</CardGroup>
+
+<Check>
+  **You're ready!** No signup needed - just start building with 0xmeta.ai today.
+</Check>

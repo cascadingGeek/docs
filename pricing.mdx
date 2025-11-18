@@ -9,10 +9,12 @@ description: "Simple, transparent pricing for x402 payment facilitation"
 
 Just start making requests to our endpoints:
 
-```
+```bash
 POST https://facilitator.api.0xmeta.ai/v1/verify
 POST https://facilitator.api.0xmeta.ai/v1/settle
 ```
+
+---
 
 ## Settlement Fees
 
@@ -20,51 +22,86 @@ We charge a **simple flat fee per successful settlement**:
 
 <CardGroup cols={2}>
   <Card title="Standard Settlement" icon="coins">
-    **0.5%** per settlement *Minimum: $1*
+    **0.75%** per settlement *Minimum: $1*
   </Card>
-  <Card title="High Volume" icon="chart-line">
-    **0.3%** per settlement *>1000 settlements/month*
+  <Card title="On-Chain Split" icon="shield-check">
+    **Automatic** via smart contract *Trustless & Atomic*
   </Card>
 </CardGroup>
 
+---
+
 ## Fee Structure
 
-| Volume/Month | Fee per Settlement | Example (on $1,000) |
-| ------------ | ------------------ | ------------------- |
-| 0 - 100      | 0.5% (min $1)      | $5.00               |
-| 101 - 1,000  | 0.5% (min $1)      | $5.00               |
-| 1,001+       | 0.3% (min $1)      | $3.00               |
+| Settlement Amount | Fee Charged | Example Cost | You Receive |
+| ----------------- | ----------- | ------------ | ----------- |
+| $50 USDC          | $1.00 (min) | 2.0%         | $49.00      |
+| $100 USDC         | $1.00 (min) | 1.0%         | $99.00      |
+| $200 USDC         | $1.50       | 0.75%        | $198.50     |
+| $1,000 USDC       | $7.50       | 0.75%        | $992.50     |
+| $10,000 USDC      | $75.00      | 0.75%        | $9,925.00   |
+
+<Note>
+  Minimum fee of $1 applies to settlements under $133. Above that, flat 0.75%
+  rate applies.
+</Note>
+
+---
 
 ## What's Included
 
 <AccordionGroup>
   <Accordion title="Payment Verification" icon="check-circle">
-    - Unlimited verification requests
-    - Base network support (Mainnet and Sepolia)
-    - Real-time transaction validation
-    - **100% Free**
+    - Unlimited verification requests - Base network support (Mainnet and
+    Sepolia) - Real-time transaction validation - **100% Free**
   </Accordion>
-
-{" "}
-
-<Accordion title="Settlement Processing" icon="arrow-right-arrow-left">
-  - Automated settlement execution - Background status polling - Webhook
-  notifications - Retry logic & error handling - **0.5% fee only on success**
-</Accordion>
-
-{" "}
-
-<Accordion title="Infrastructure" icon="server">
-  - 99.9% uptime - Sub-2 second response times - Global CDN - DDoS protection -
-  **All included**
-</Accordion>
-
+  <Accordion title="Settlement Processing" icon="arrow-right-arrow-left">
+    - Automated settlement execution - Smart contract fee splitting - Background
+    status polling - Webhook notifications - Retry logic & error handling -
+    **0.75% fee only on success**
+  </Accordion>
+  <Accordion title="Infrastructure" icon="server">
+    - 99.9% uptime - Sub-2 second response times - Global CDN - DDoS protection
+    - **All included**
+  </Accordion>
   <Accordion title="Support" icon="headset">
-    - Documentation
-    - Community Discord
-    - **Free for all users**
+    - Comprehensive documentation - Community Discord - Open-source examples -
+    **Free for all users**
   </Accordion>
 </AccordionGroup>
+
+---
+
+## How Fee Collection Works
+
+Unlike traditional payment processors, 0xmeta.ai uses a **smart contract** to automatically split fees on-chain:
+
+<Steps>
+  <Step title="Customer Signs Authorization">
+    Customer signs an EIP-3009 authorization to our SettlementSplitter smart
+    contract (not directly to you).
+  </Step>
+  <Step title="Settlement Initiated">
+    You call `/v1/settle` to initiate the settlement process.
+  </Step>
+  <Step title="Smart Contract Executes">
+    The smart contract: 1. Receives the full payment amount 2. Automatically
+    calculates 0.75% fee 3. Sends 0.75% to 0xmeta treasury 4. Sends remaining
+    99.25% to your address. All in a **single atomic transaction**.
+  </Step>
+  <Step title="You Receive Funds">
+    Your wallet receives the net amount (after fees) in 1-5 minutes.
+  </Step>
+</Steps>
+
+<Info>
+  **Why Smart Contracts?** - **Trustless**: No need to trust us - the split is
+  enforced on-chain - **Atomic**: Either all transfers succeed or all fail -
+  **Transparent**: Every fee is visible on BaseScan - **Secure**: Battle-tested
+  OpenZeppelin contracts
+</Info>
+
+---
 
 ## Fee Calculation Examples
 
@@ -72,99 +109,114 @@ We charge a **simple flat fee per successful settlement**:
 
 ```
 Payment Amount: $1,000 USDC
-Settlement Fee: $1,000 × 0.5% = $5.00
-You Receive: $995.00 USDC
+Settlement Fee: $1,000 × 0.75% = $7.50
+You Receive: $992.50 USDC
 
-Total Cost: $5.00 (0.5%)
+Total Cost: $7.50 (0.75%)
 ```
 
 ### Example 2: Small Transaction
 
 ```
 Payment Amount: $50 DAI
-Settlement Fee: $50 × 0.5% = $0.25 → $1.00 (minimum)
+Settlement Fee: $50 × 0.75% = $0.375 → $1.00 (minimum)
 You Receive: $49.00 DAI
 
-Total Cost: $1.00 (2%)
+Total Cost: $1.00 (2.0%)
 ```
 
-### Example 3: High Volume (1000+ settlements)
+### Example 3: Large Transaction
 
 ```
-Payment Amount: $1,000 ETH
-Settlement Fee: $1,000 × 0.3% = $3.00
-You Receive: $997.00 ETH
+Payment Amount: $10,000 ETH
+Settlement Fee: $10,000 × 0.75% = $75.00
+You Receive: $9,925.00 ETH
 
-Total Cost: $3.00 (0.3%)
+Total Cost: $75.00 (0.75%)
 ```
+
+---
 
 ## Pricing Comparison
 
-| Feature         | 0xmeta.ai   | Traditional Payment Gateway |
-| --------------- | ----------- | --------------------------- |
-| Verification    | Free        | Free                        |
-| Settlement Fee  | 0.5%        | 2.9% + $0.30                |
-| Signup Required | ❌ No       | ✅ Yes                      |
-| Monthly Fees    | $0          | $10-30                      |
-| Payout Speed    | 1-5 minutes | 2-7 days                    |
-| Crypto Native   | ✅ Yes      | ❌ No                       |
+| Feature              | 0xmeta.ai    | Traditional Gateway | Coinbase Commerce |
+| -------------------- | ------------ | ------------------- | ----------------- |
+| Verification         | **Free**     | Free                | Free              |
+| Settlement Fee       | **0.75%**    | 2.9% + $0.30        | 1.0%              |
+| Signup Required      | **❌ No**    | ✅ Yes              | ✅ Yes            |
+| Monthly Fees         | **$0**       | $10-30              | $0                |
+| Payout Speed         | **1-5 min**  | 2-7 days            | 1-3 days          |
+| On-Chain Transparent | **✅ Yes**   | ❌ No               | ⚠️ Partial        |
+| Crypto Native        | **✅ Yes**   | ❌ No               | ✅ Yes            |
+| Account Lockups      | **❌ Never** | ⚠️ Possible         | ⚠️ Possible       |
 
-## How Fees Are Deducted
+<Tip>
+**Cost Comparison on $1,000 transaction:**
+- Stripe: $29.30 (2.9% + $0.30)
+- Coinbase: $10.00 (1.0%)
+- **0xmeta.ai: $7.50 (0.75%)** ✨
 
-Fees are **automatically deducted** during settlement:
+You save **74% compared to Stripe!**
 
-```mermaid
-graph LR
-    A[Payment: $1,000] --> B[Verification: Free]
-    B --> C[Settlement Initiated]
-    C --> D[Fee Deducted: $5]
-    D --> E[You Receive: $995]
+</Tip>
 
-    style B fill:#d4edda
-    style D fill:#fff3cd
-    style E fill:#d4edda
-```
-
-The settlement process:
-
-1. Customer pays $1,000
-2. You verify (free)
-3. You initiate settlement
-4. We deduct 0.5% ($5)
-5. You receive $995
+---
 
 ## No Hidden Fees
 
+<Check>✅ No signup required</Check>
 <Check>✅ No monthly fees</Check>
 <Check>✅ No setup fees</Check>
 <Check>✅ No integration fees</Check>
-<Check>✅ No API call fees</Check>
+<Check>✅ No API key management</Check>
 <Check>✅ No account fees</Check>
 <Check>✅ No minimum volume</Check>
+<Check>✅ No gas fees (handled by smart contract)</Check>
+
+---
 
 ## Blockchain Gas Fees
 
-**Gas fees are included** in the settlement fee. You don't need to worry about:
+**Gas fees are included** in the settlement process. You don't need to worry about:
 
 - Fluctuating gas prices
 - Failed transactions
 - Transaction monitoring
 - Nonce management
+- Wallet management
 
-We handle all blockchain complexity.
+We handle all blockchain complexity through our smart contract infrastructure.
 
-## Volume Discounts
+---
 
-High-volume users automatically get better rates:
+## Smart Contract Details
 
-| Monthly Volume | Rate   | Annual Savings\* |
-| -------------- | ------ | ---------------- |
-| 0-100          | 0.5%   | -                |
-| 101-1,000      | 0.5%   | -                |
-| 1,001-10,000   | 0.3%   | $24,000          |
-| 10,000+        | Custom | Contact us       |
+Our SettlementSplitter smart contract is:
 
-\*Based on $1M monthly volume
+<CardGroup cols={2}>
+  <Card title="Open Source" icon="code">
+    Fully auditable contract code on GitHub
+  </Card>
+  <Card title="Verified" icon="shield-check">
+    Verified on BaseScan for transparency
+  </Card>
+  <Card title="Battle-Tested" icon="flask">
+    Built with OpenZeppelin libraries
+  </Card>
+  <Card title="Non-Custodial" icon="wallet">
+    Never holds your funds beyond execution
+  </Card>
+</CardGroup>
+
+**Contract Address (Base Mainnet):**
+
+```
+0x... (Available after deployment)
+```
+
+View on BaseScan: [Contract Details](https://basescan.org/address/0x...)
+
+---
 
 ## Fair & Transparent
 
@@ -185,10 +237,106 @@ Unlike traditional payment processors, we:
   </Card>
 </CardGroup>
 
+---
+
 ## When You Pay
 
 You only pay when settlement **completes successfully**:
 
 - ✅ Verification fails → **$0 charged**
 - ✅ Settlement fails → **$0 charged**
-- ✅ Settlement succeeds → **0.5% fee applied**
+- ✅ Settlement succeeds → **0.75% fee automatically deducted on-chain**
+
+<Warning>
+  Fees are **deducted automatically** by the smart contract during settlement.
+  You receive the net amount directly to your wallet.
+</Warning>
+
+---
+
+## Fee Analytics
+
+Track your fee spending with our analytics API:
+
+```bash
+GET https://facilitator.api.0xmeta.ai/v1/analytics/fees?days=30
+```
+
+**Response:**
+
+```json
+{
+  "period_days": 30,
+  "settlement_count": 150,
+  "total_fees_paid": 1125.0,
+  "total_volume": 150000.0,
+  "average_fee": 7.5
+}
+```
+
+---
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Why 0.75% instead of 0.5%?">
+    While 0.75% is slightly higher than our initial 0.5% target, it's still
+    **74% cheaper than Stripe** and **25% cheaper than Coinbase Commerce**. This
+    rate ensures sustainable operations while remaining the most competitive
+    option in the market.
+  </Accordion>
+  <Accordion title="Can I negotiate volume discounts?">
+    Currently, we offer a flat 0.75% rate for all users. As our platform grows
+    and we reach significant scale, we plan to introduce volume-based pricing
+    tiers. For now, everyone gets the same competitive rate.
+  </Accordion>
+  <Accordion title="How are fees collected without API keys?">
+    Fees are collected automatically through our smart contract. When a customer
+    authorizes payment, they sign to our SettlementSplitter contract which
+    automatically splits the funds on-chain. No authentication or manual
+    intervention needed.
+  </Accordion>
+  <Accordion title="What if the smart contract fails?">
+    Our smart contract uses battle-tested OpenZeppelin libraries and includes
+    comprehensive error handling. If any step fails, the entire transaction
+    reverts - you either get the full settlement (minus fees) or nothing at all.
+    No partial payments.
+  </Accordion>
+  <Accordion title="Can I see all fees on-chain?">
+    Absolutely! Every settlement and fee is recorded on the Base blockchain. You
+    can view all transactions on BaseScan, including the exact split between
+    your payment and our fee.
+  </Accordion>
+  <Accordion title="Do I need to approve anything?">
+    No! Customers sign a standard EIP-3009 authorization which is built into
+    USDC. No separate token approvals needed. One signature, one transaction,
+    instant settlement.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card
+    title="View Documentation"
+    icon="book"
+    href="/api-reference/introduction"
+  >
+    Complete API reference and guides
+  </Card>
+  <Card title="Join Discord" icon="discord" href="https://discord.gg/0xmeta">
+    Get support from our community
+  </Card>
+  <Card
+    title="Smart Contract"
+    icon="code"
+    href="https://github.com/0xmeta/contracts"
+  >
+    View our open-source contracts
+  </Card>
+  <Card title="Contact Us" icon="envelope" href="mailto:support@0xmeta.ai">
+    Enterprise support inquiries
+  </Card>
+</CardGroup>
