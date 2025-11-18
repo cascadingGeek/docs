@@ -90,6 +90,10 @@
         ]
       },
       {
+        "group": "Playground",
+        "openapi": "/openapi.json"
+      },
+      {
         "group": "Support",
         "pages": ["troubleshooting", "faq"]
       }
@@ -114,6 +118,5 @@
   "feedback": {
     "suggestEdit": true,
     "raiseIssue": true
-  },
-  "openapi": "openapi.json"
+  }
 }

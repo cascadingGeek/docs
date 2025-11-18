@@ -1,1 +1,100 @@
-{"openapi":"3.1.0","info":{"title":"0xmeta.ai x402 Facilitator","description":"Payment verification and settlement facilitator for x402 protocol","version":"1.0.0"},"paths":{"/v1/verify":{"post":{"tags":["Payments"],"summary":"Verify Payment","description":"Verify a blockchain payment transaction","operationId":"verify_payment_v1_verify_post","parameters":[{"name":"X-API-Key","in":"header","required":true,"schema":{"type":"string","title":"X-Api-Key"}},{"name":"Idempotency-Key","in":"header","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Idempotency-Key"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/VerifyPaymentRequest"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/VerifyPaymentResponse"}}}},"400":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Bad Request"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"},"502":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Bad Gateway"}}}},"/v1/settle":{"post":{"tags":["Payments"],"summary":"Settle Payment","description":"Initiate settlement of a verified payment","operationId":"settle_payment_v1_settle_post","parameters":[{"name":"X-API-Key","in":"header","required":true,"schema":{"type":"string","title":"X-Api-Key"}},{"name":"Idempotency-Key","in":"header","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Idempotency-Key"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SettlePaymentRequest"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/SettlePaymentResponse"}}}},"400":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Bad Request"},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"404":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Not Found"},"422":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unprocessable Entity"},"502":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Bad Gateway"}}}},"/v1/verifications/{verification_id}":{"get":{"tags":["Payments"],"summary":"Get Verification Status","description":"Query the status of a payment verification","operationId":"get_verification_status_v1_verifications__verification_id__get","parameters":[{"name":"verification_id","in":"path","required":true,"schema":{"type":"string","title":"Verification Id"}},{"name":"X-API-Key","in":"header","required":true,"schema":{"type":"string","title":"X-Api-Key"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/StatusResponse"}}}},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"404":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Not Found"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/v1/settlements/{settlement_id}":{"get":{"tags":["Payments"],"summary":"Get Settlement Status","description":"Query the status of a payment settlement","operationId":"get_settlement_status_v1_settlements__settlement_id__get","parameters":[{"name":"settlement_id","in":"path","required":true,"schema":{"type":"string","title":"Settlement Id"}},{"name":"X-API-Key","in":"header","required":true,"schema":{"type":"string","title":"X-Api-Key"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/StatusResponse"}}}},"401":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Unauthorized"},"404":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ErrorResponse"}}},"description":"Not Found"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/v1/health":{"get":{"tags":["Payments"],"summary":"Health Check","description":"Check if the API is healthy","operationId":"health_check_v1_health_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"additionalProperties":true,"type":"object","title":"Response Health Check V1 Health Get"}}}}}}},"/":{"get":{"tags":["Info"],"summary":"Root","description":"Root endpoint with API information.","operationId":"root__get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}}},"components":{"schemas":{"ChainType":{"type":"string","enum":["ethereum","polygon","arbitrum","optimism","base"],"title":"ChainType","description":"Supported blockchain networks."},"ErrorResponse":{"properties":{"error":{"additionalProperties":true,"type":"object","title":"Error","description":"Error details"}},"type":"object","required":["error"],"title":"ErrorResponse","description":"Standard error response.","example":{"error":{"code":"invalid_request","details":{},"message":"Invalid transaction hash format"}}},"HTTPValidationError":{"properties":{"detail":{"items":{"$ref":"#/components/schemas/ValidationError"},"type":"array","title":"Detail"}},"type":"object","title":"HTTPValidationError"},"PaymentStatus":{"type":"string","enum":["pending","verified","failed","settled","rejected"],"title":"PaymentStatus","description":"Payment verification and settlement status."},"SettlePaymentRequest":{"properties":{"verification_id":{"type":"string","title":"Verification Id","description":"Verification ID to settle"},"destination_address":{"type":"string","maxLength":42,"minLength":42,"title":"Destination Address","description":"Address to receive funds"},"amount":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Amount","description":"Amount to settle (None for full amount)"},"metadata":{"anyOf":[{"additionalProperties":true,"type":"object"},{"type":"null"}],"title":"Metadata","description":"Additional settlement metadata"}},"type":"object","required":["verification_id","destination_address"],"title":"SettlePaymentRequest","description":"Request to settle a verified payment."},"SettlePaymentResponse":{"properties":{"settlement_id":{"type":"string","title":"Settlement Id","description":"Unique settlement identifier"},"verification_id":{"type":"string","title":"Verification Id","description":"Associated verification ID"},"status":{"$ref":"#/components/schemas/PaymentStatus","description":"Settlement status"},"settlement_tx_hash":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Settlement Tx Hash","description":"Settlement transaction hash (when available)"},"settled_amount":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Settled Amount","description":"Amount settled in wei"},"settled_at":{"anyOf":[{"type":"string","format":"date-time"},{"type":"null"}],"title":"Settled At","description":"Timestamp when settlement completed"},"details":{"anyOf":[{"additionalProperties":true,"type":"object"},{"type":"null"}],"title":"Details","description":"Additional settlement details"}},"type":"object","required":["settlement_id","verification_id","status"],"title":"SettlePaymentResponse","description":"Response from settlement initiation."},"StatusResponse":{"properties":{"id":{"type":"string","title":"Id","description":"Verification or settlement ID"},"type":{"type":"string","title":"Type","description":"Type: verification or settlement"},"status":{"$ref":"#/components/schemas/PaymentStatus","description":"Current status"},"created_at":{"type":"string","format":"date-time","title":"Created At","description":"Creation timestamp"},"updated_at":{"type":"string","format":"date-time","title":"Updated At","description":"Last update timestamp"},"transaction_hash":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Transaction Hash","description":"Transaction hash"},"chain":{"anyOf":[{"$ref":"#/components/schemas/ChainType"},{"type":"null"}],"description":"Blockchain network"},"details":{"additionalProperties":true,"type":"object","title":"Details","description":"Additional status details"}},"type":"object","required":["id","type","status","created_at","updated_at"],"title":"StatusResponse","description":"Response for status queries."},"ValidationError":{"properties":{"loc":{"items":{"anyOf":[{"type":"string"},{"type":"integer"}]},"type":"array","title":"Location"},"msg":{"type":"string","title":"Message"},"type":{"type":"string","title":"Error Type"}},"type":"object","required":["loc","msg","type"],"title":"ValidationError"},"VerifyPaymentRequest":{"properties":{"transaction_hash":{"type":"string","maxLength":66,"minLength":66,"title":"Transaction Hash","description":"Blockchain transaction hash"},"chain":{"$ref":"#/components/schemas/ChainType","description":"Blockchain network"},"seller_address":{"type":"string","maxLength":42,"minLength":42,"title":"Seller Address","description":"Seller's blockchain address"},"expected_amount":{"type":"string","title":"Expected Amount","description":"Expected payment amount in wei/smallest unit"},"expected_token":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Expected Token","description":"Expected token contract address (None for native token)"},"metadata":{"anyOf":[{"additionalProperties":true,"type":"object"},{"type":"null"}],"title":"Metadata","description":"Additional metadata for the transaction"},"webhook_url":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Webhook Url","description":"URL to receive settlement status updates"}},"type":"object","required":["transaction_hash","chain","seller_address","expected_amount"],"title":"VerifyPaymentRequest","description":"Request to verify a payment transaction."},"VerifyPaymentResponse":{"properties":{"verification_id":{"type":"string","title":"Verification Id","description":"Unique verification identifier"},"status":{"$ref":"#/components/schemas/PaymentStatus","description":"Verification status"},"transaction_hash":{"type":"string","title":"Transaction Hash","description":"Transaction hash"},"chain":{"$ref":"#/components/schemas/ChainType","description":"Blockchain network"},"verified_amount":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Verified Amount","description":"Actual verified amount in wei"},"verified_token":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Verified Token","description":"Verified token contract address"},"verified_at":{"anyOf":[{"type":"string","format":"date-time"},{"type":"null"}],"title":"Verified At","description":"Timestamp when verification completed"},"details":{"anyOf":[{"additionalProperties":true,"type":"object"},{"type":"null"}],"title":"Details","description":"Additional verification details"}},"type":"object","required":["verification_id","status","transaction_hash","chain"],"title":"VerifyPaymentResponse","description":"Response from payment verification."}}}}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "0xMeta Crypto News Aggregator",
+    "description": "Real-time crypto news and social media aggregation service",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/markets/trends": {
+      "get": {
+        "tags": ["markets"],
+        "summary": "Get Trends",
+        "description": "Get trending crypto news and social updates\n\nReturns:\n    Merged data from CryptoNews API and Twitter feeds for trending topics",
+        "operationId": "get_trends_markets_trends_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/liquidity": {
+      "get": {
+        "tags": ["markets"],
+        "summary": "Get Liquidity",
+        "description": "Get liquidity-related crypto news and updates\n\nReturns:\n    Merged data about trading volume, liquidity pools, and DEX activity",
+        "operationId": "get_liquidity_markets_liquidity_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/agents": {
+      "get": {
+        "tags": ["markets"],
+        "summary": "Get Agents",
+        "description": "Get AI agents and automation-related news\n\nReturns:\n    Merged data about AI agents, bots, and automation in crypto",
+        "operationId": "get_agents_markets_agents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/macro_events": {
+      "get": {
+        "tags": ["markets"],
+        "summary": "Get Macro Events",
+        "description": "Get macro economic events and regulatory news\n\nReturns:\n    Merged data about regulations, institutional adoption, and macro events",
+        "operationId": "get_macro_events_markets_macro_events_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/markets/proof_of_work": {
+      "get": {
+        "tags": ["markets"],
+        "summary": "Get Proof Of Work",
+        "description": "Get mining and Proof of Work related news\n\nReturns:\n    Merged data about mining, hashrate, and PoW developments",
+        "operationId": "get_proof_of_work_markets_proof_of_work_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
