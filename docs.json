@@ -52,8 +52,12 @@
   "navigation": {
     "groups": [
       {
+        "group": "Overview",
+        "pages": ["micro-protocols"]
+      },
+      {
         "group": "Get Started",
-        "pages": ["overview", "quickstart", "pricing"]
+        "pages": ["quickstart", "pricing"]
       },
       {
         "group": "API Documentation",
