@@ -1,81 +1,43 @@
 ---
 title: "Settle Payment"
 api: "POST /v1/settle"
-description: "Initiate settlement of a verified payment"
+description: "Execute settlement of a verified EIP-3009 payment"
 ---
 
 ## Endpoint
 
-Initiate settlement to transfer verified funds to a destination address.
+Initiate settlement of a verified payment. This executes the transferWithAuthorization on-chain.
 
 <ParamField path="verification_id" type="string" required>
   The verification ID from a successful payment verification Example:
-  `ver_abc123def456`
+  `vrf_b183c9692fac4481`
 </ParamField>
 
 <ParamField path="destination_address" type="string" required>
-  Blockchain address to receive the funds (42 characters, must start with 0x)
-  Example: `0x742d35cc6634c0532925a3b844bc9e7595f0beb0`
-</ParamField>
-
-<ParamField path="amount" type="string">
-  Amount to settle in wei. If `null`, settles the full verified amount. Example:
-  `"500000000000000000"` (0.5 ETH)
-</ParamField>
-
-<ParamField path="metadata" type="object">
-  Additional metadata for the settlement
-  
-  ```json
-  {
-    "payout_id": "PAYOUT-789",
-    "notes": "Monthly payout"
-  }
-  ```
-</ParamField>
-
-## Headers
-
-<ParamField header="X-API-Key" type="string" required>
-  Your API key for authentication
-</ParamField>
-
-<ParamField header="Idempotency-Key" type="string" recommended>
-  Unique key to prevent duplicate settlements. Valid for 24 hours.
+  Merchant's address to receive the funds (42 characters, must start with 0x)
+  Example: `0xa821f428ef8cc9f54a9915336a82220853059090`
 </ParamField>
 
 <RequestExample>
 
 ```bash cURL
-curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
+curl -X POST https://facilitator.0xmeta.ai/v1/settle \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: your_api_key" \
-  -H "Idempotency-Key: settle_$(date +%s)" \
   -d '{
-    "verification_id": "ver_abc123def456",
-    "destination_address": "0x742d35cc6634c0532925a3b844bc9e7595f0beb0",
-    "amount": null,
-    "metadata": {
-      "payout_id": "PAYOUT-789"
-    }
+    "verification_id": "vrf_b183c9692fac4481",
+    "destination_address": "0xa821f428ef8cc9f54a9915336a82220853059090"
   }'
 ```
 
 ```javascript JavaScript
-const response = await fetch("https://facilitator.api.0xmeta.ai/v1/settle", {
+const response = await fetch("https://facilitator.0xmeta.ai/v1/settle", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "X-API-Key": "your_api_key",
-    "Idempotency-Key": `settle_${Date.now()}`,
   },
   body: JSON.stringify({
-    verification_id: "ver_abc123def456",
-    destination_address: "0x742d35cc6634c0532925a3b844bc9e7595f0beb0",
-    amount: null,
-    metadata: {
-      payout_id: "PAYOUT-789",
-    },
+    verification_id: "vrf_b183c9692fac4481",
+    destination_address: "0xa821f428ef8cc9f54a9915336a82220853059090",
   }),
 });
 
@@ -85,22 +47,13 @@ console.log(data.settlement_id);
 
 ```python Python
 import requests
-import time
 
 response = requests.post(
-    'https://facilitator.api.0xmeta.ai/v1/settle',
-    headers={
-        'Content-Type': 'application/json',
-        'X-API-Key': 'your_api_key',
-        'Idempotency-Key': f'settle_{int(time.time())}'
-    },
+    'https://facilitator.0xmeta.ai/v1/settle',
+    headers={'Content-Type': 'application/json'},
     json={
-        'verification_id': 'ver_abc123def456',
-        'destination_address': '0x742d35cc6634c0532925a3b844bc9e7595f0beb0',
-        'amount': None,
-        'metadata': {
-            'payout_id': 'PAYOUT-789'
-        }
+        'verification_id': 'vrf_b183c9692fac4481',
+        'destination_address': '0xa821f428ef8cc9f54a9915336a82220853059090'
     }
 )
 
@@ -112,32 +65,34 @@ print(data['settlement_id'])
 
 <ResponseExample>
 
-```json Success Response (200 OK)
+```json Pending Response (200 OK)
 {
-  "settlement_id": "set_xyz789ghi012",
-  "verification_id": "ver_abc123def456",
+  "settlement_id": "stl_a47920cbc2dc45c5",
+  "verification_id": "vrf_b183c9692fac4481",
   "status": "pending",
   "settlement_tx_hash": null,
-  "settled_amount": null,
+  "settled_amount": "10000",
   "settled_at": null,
-  "details": {
-    "estimated_time": 300
-  }
+  "destination_address": "0xa821f428ef8cc9f54a9915336a82220853059090",
+  "upstream_settlement_id": "574e56cd-a679-41c9-8aa3-90a4dcf42a03",
+  "fee_collection_status": "pending",
+  "created_at": "2025-11-24T07:43:04Z"
 }
 ```
 
-```json Completed Immediately (200 OK)
+```json Completed Response (200 OK)
 {
-  "settlement_id": "set_xyz789ghi012",
-  "verification_id": "ver_abc123def456",
+  "settlement_id": "stl_edd93707df714b41",
+  "verification_id": "vrf_97617f0da9a241ab",
   "status": "settled",
-  "settlement_tx_hash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-  "settled_amount": "1000000000000000000",
-  "settled_at": "2025-01-15T10:35:00Z",
-  "details": {
-    "fee": "50000000000000000",
-    "gas_used": "65000"
-  }
+  "settlement_tx_hash": "0x795d83089672d51148e7f53a65b9ac2e43e7ca9113f986dfca4cb1096248bf2b",
+  "settled_amount": "10000",
+  "settled_at": "2025-11-24T07:44:43Z",
+  "destination_address": "0xa821f428ef8cc9f54a9915336a82220853059090",
+  "upstream_settlement_id": "e221bdd2-0014-4a3c-890a-086f9b1c20b7",
+  "fee_collection_status": "success",
+  "fee_tx_hash": "0x...",
+  "created_at": "2025-11-24T07:44:35Z"
 }
 ```
 
@@ -145,19 +100,44 @@ print(data['settlement_id'])
 {
   "error": {
     "code": "not_found",
-    "message": "Verification not found: ver_invalid123"
+    "message": "Verification not found: vrf_invalid123"
   }
 }
 ```
 
-```json Verification Not Ready (400)
+```json Insufficient Allowance (400)
+{
+  "error": {
+    "code": "insufficient_allowance",
+    "message": "Merchant has not approved USDC spending for fee collection",
+    "details": {
+      "required_approval": "0.001",
+      "current_allowance": "0",
+      "treasury_address": "0xa92560dcaf2fb556dfee4d2599f021a511b94aae"
+    }
+  }
+}
+```
+
+```json Authorization Expired (400)
 {
   "error": {
     "code": "settlement_failed",
-    "message": "Cannot settle payment with status: pending",
+    "message": "FiatTokenV2: authorization is expired",
     "details": {
-      "verification_id": "ver_abc123def456",
-      "current_status": "pending"
+      "reason": "Authorization validBefore timestamp has passed"
+    }
+  }
+}
+```
+
+```json Authorization Already Used (400)
+{
+  "error": {
+    "code": "settlement_failed",
+    "message": "FiatTokenV2: authorization is used or canceled",
+    "details": {
+      "reason": "This nonce has already been used in a previous settlement"
     }
   }
 }
@@ -176,106 +156,251 @@ print(data['settlement_id'])
 </ResponseField>
 
 <ResponseField name="status" type="string" required>
-  Settlement status: `pending`, `settled`, `failed`, or `rejected`
+  Settlement status: `pending`, `settled`, or `failed`
 </ResponseField>
 
 <ResponseField name="settlement_tx_hash" type="string">
-  Transaction hash of the settlement (available when settled)
+  On-chain transaction hash (available when settled)
 </ResponseField>
 
 <ResponseField name="settled_amount" type="string">
-  Amount settled in wei (available when settled)
+  Amount settled in token's smallest unit
 </ResponseField>
 
 <ResponseField name="settled_at" type="string">
   ISO 8601 timestamp when settlement completed
 </ResponseField>
 
-<ResponseField name="details" type="object">
-  Additional settlement details (fees, gas, estimated time)
+<ResponseField name="destination_address" type="string">
+  Merchant's receiving address
+</ResponseField>
+
+<ResponseField name="upstream_settlement_id" type="string">
+  Provider transaction execution ID
+</ResponseField>
+
+<ResponseField name="fee_collection_status" type="string">
+  Fee collection status: `pending`, `success`, `failed_insufficient_allowance`,
+  `failed_insufficient_balance`, or `failed`
+</ResponseField>
+
+<ResponseField name="fee_tx_hash" type="string">
+  Transaction hash of fee collection (if separate from settlement)
 </ResponseField>
 
 ## Settlement Process
 
-<Steps>
-  <Step title="Initiate Settlement">
-    Call the settle endpoint with verification_id
-  </Step>
+```mermaid
+sequenceDiagram
+    participant Merchant
+    participant 0xmeta
+    participant Treasury
+    participant Provider
+    participant Blockchain
 
-  <Step title="Background Processing">
-    Settlement is processed asynchronously by background workers
-  </Step>
+    Merchant->>0xmeta: POST /v1/settle
+    Note over 0xmeta: Create settlement record<br/>Status: pending
 
-  <Step title="Automatic Polling">
-    Status is automatically polled every 5 seconds
-  </Step>
+    0xmeta->>0xmeta: Get paymentPayload from verification
 
-  <Step title="Webhook Notification">
-    You receive a webhook when settlement completes (if webhook_url was provided
-    during verification)
-  </Step>
-</Steps>
+    0xmeta->>Treasury: transferFrom(merchant, $0.001 USDC)
+
+    alt Sufficient Allowance
+        Treasury-->>0xmeta: ✅ Fee collected
+        Note over 0xmeta: fee_collection_status: success
+
+        0xmeta->>Provider: Execute transferWithAuthorization
+        Provider->>Blockchain: Submit transaction
+
+        alt Transaction Success
+            Blockchain-->>Provider: ✅ Confirmed
+            Provider-->>0xmeta: TransactionExecutionSuccess
+            Note over 0xmeta: Status: settled
+            0xmeta-->>Merchant: Settlement complete
+        else Transaction Failure
+            Blockchain-->>Provider: ❌ Reverted
+            Provider-->>0xmeta: TransactionExecutionFailure
+            Note over 0xmeta: Status: failed
+            0xmeta-->>Merchant: Settlement failed
+        end
+
+    else Insufficient Allowance
+        Treasury-->>0xmeta: ❌ Insufficient allowance
+        Note over 0xmeta: Status: failed<br/>fee_collection_status: failed_insufficient_allowance
+        0xmeta-->>Merchant: ❌ Approval required
+    end
+```
 
 ## Settlement States
 
 ```mermaid
-graph LR
-    A[Initiate Settlement] --> B[pending]
-    B --> C{Processing}
-    C -->|Success| D[settled]
-    C -->|Failure| E[failed]
-    C -->|Rejected| F[rejected]
+stateDiagram-v2
+    [*] --> pending: POST /v1/settle
 
-    style A fill:#e1f5ff
-    style D fill:#d4edda
-    style E fill:#f8d7da
-    style F fill:#fff3cd
+    pending --> fee_check: Check merchant allowance
+
+    fee_check --> fee_collected: Allowance sufficient
+    fee_check --> failed: Insufficient allowance
+
+    fee_collected --> executing: Submit to Provider
+
+    executing --> settled: Transaction confirmed
+    executing --> failed: Transaction reverted
+
+    settled --> [*]
+    failed --> [*]
+
+    note right of fee_check
+        $0.001 USDC fee
+        collected via transferFrom
+    end note
+
+    note right of executing
+        EIP-3009 executed
+        via Provider API
+    end note
 ```
 
+## Fee Collection
+
+Before settlement can proceed, 0xmeta collects a **$0.001 flat fee** via USDC `transferFrom`:
+
+<Steps>
+  <Step title="One-Time Approval Required">
+    Merchant must approve 0xmeta treasury to spend USDC:
+    
+    ```javascript
+    const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Base Sepolia
+    const TREASURY = "0xa92560dcaf2fb556dfee4d2599f021a511b94aae";
+    
+    await usdcContract.approve(
+      TREASURY,
+      ethers.parseUnits("10", 6) // $10 = 10,000 settlements
+    );
+    ```
+  </Step>
+
+{" "}
+
+<Step title="Fee Collection">
+  When settlement is initiated: ```solidity USDC.transferFrom(merchant,
+  treasury, 1000); // $0.001 (6 decimals) ```
+</Step>
+
+  <Step title="Settlement Execution">
+    After fee collection, the EIP-3009 authorization is executed via Provider
+  </Step>
+</Steps>
+
+<Warning>
+  **Without USDC approval, settlements will fail!** You must approve the
+  treasury address before your first settlement.
+</Warning>
+
+## Handling Settlement Status
+
+### Polling for Status
+
+```javascript
+async function waitForSettlement(settlementId) {
+  const maxAttempts = 60; // 5 minutes
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const response = await fetch(
+      `https://facilitator.0xmeta.ai/v1/settlements/${settlementId}`
+    );
+
+    const settlement = await response.json();
+
+    if (settlement.status === "settled") {
+      console.log("✅ Settlement complete:", settlement.settlement_tx_hash);
+      return settlement;
+    }
+
+    if (settlement.status === "failed") {
+      console.error("❌ Settlement failed:", settlement.fee_collection_status);
+      throw new Error("Settlement failed");
+    }
+
+    // Wait 5 seconds before next check
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+
+  throw new Error("Settlement timeout");
+}
+```
+
+### Fee Collection Status Values
+
+| Status                          | Description                            |
+| ------------------------------- | -------------------------------------- |
+| `pending`                       | Fee collection not yet attempted       |
+| `success`                       | Fee successfully collected             |
+| `failed_insufficient_allowance` | Merchant hasn't approved USDC spending |
+| `failed_insufficient_balance`   | Merchant has no USDC balance           |
+| `failed`                        | Other error during fee collection      |
+
+## Common Issues
+
 <AccordionGroup>
-  <Accordion title="Full Amount Settlement">
-    ```json
-    {
-      "verification_id": "ver_abc123",
-      "destination_address": "0x...",
-      "amount": null  // Settles full verified amount
-    }
+  <Accordion title="Insufficient Allowance">
+    **Error:** `fee_collection_status: failed_insufficient_allowance`
+    
+    **Solution:** Approve USDC spending:
+    ```bash
+    # Run merchant approval setup
+    python -m app.merchant_approval --network base-sepolia --amount 1000
     ```
   </Accordion>
 
-  <Accordion title="Partial Amount Settlement">
-    ```json
-    {
-      "verification_id": "ver_abc123",
-      "destination_address": "0x...",
-      "amount": "500000000000000000"  // Settle 0.5 ETH
-    }
-    ```
-  </Accordion>
+{" "}
 
-  <Accordion title="With Metadata">
-    ```json
-    {
-      "verification_id": "ver_abc123",
-      "destination_address": "0x...",
-      "metadata": {
-        "payout_batch": "2025-01-15",
-        "recipient_id": "USER-123"
-      }
-    }
-    ```
+<Accordion title="Authorization Expired">
+  **Error:** `FiatTokenV2: authorization is expired` **Solution:** User needs to
+  create a new authorization with longer `validBefore`: ```javascript
+  validBefore: String(Math.floor(Date.now() / 1000) + 86400) // 24 hours ```
+</Accordion>
+
+{" "}
+
+<Accordion title="Authorization Already Used">
+  **Error:** `FiatTokenV2: authorization is used or canceled` **Solution:**
+  Generate a new unique nonce for each payment: ```javascript const nonceBytes =
+  new Uint8Array(32); window.crypto.getRandomValues(nonceBytes); const nonce =
+  "0x" + Array.from(nonceBytes) .map(b => b.toString(16).padStart(2, "0"))
+  .join(""); ```
+</Accordion>
+
+  <Accordion title="Settlement Takes Long">
+    Settlements typically complete in 30-60 seconds. Delays can occur due to:
+    - Network congestion
+    - Provider API processing time
+    - RPC endpoint issues
+    
+    **Solution:** Implement proper polling with timeouts (max 5 minutes)
   </Accordion>
 </AccordionGroup>
 
+## Settlement Timing
+
+| Stage                 | Typical Duration  |
+| --------------------- | ----------------- |
+| Fee Collection        | < 5 seconds       |
+| Provider Submission   | 5-15 seconds      |
+| On-chain Confirmation | 15-45 seconds     |
+| **Total**             | **30-60 seconds** |
+
 <Info>
-  Settlement typically completes in 1-5 minutes depending on network congestion.
+  Settlement typically completes in **30-60 seconds** on Base network. Use
+  polling or webhooks to track status.
 </Info>
 
-<Warning>
-  Only verified payments can be settled. The verification status must be
-  `verified`.
-</Warning>
-
 <Tip>
-  Use webhooks to get notified when settlement completes instead of polling.
+  Save the `settlement_id` immediately and track it in your database. You'll
+  need it to check status and handle any issues.
 </Tip>
+
+<Check>
+  **Fee:** $0.001 flat fee per successful settlement (collected before
+  execution).
+</Check>

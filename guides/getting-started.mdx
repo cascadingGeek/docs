@@ -1,0 +1,451 @@
+---
+title: "Getting Started"
+description: "Complete setup guide for merchants accepting x402 payments"
+---
+
+## Overview
+
+This guide walks you through setting up your merchant account to accept x402 payments via 0xmeta.
+
+<Note>
+  **No account needed!** The API is permissionless. The only setup required is
+  approving USDC spending for fee collection.
+</Note>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Merchant Wallet">
+    You need an Ethereum wallet address where you'll receive payments
+  </Step>
+
+{" "}
+<Step title="Private Key Access">
+  Access to the wallet's private key (for one-time USDC approval setup)
+</Step>
+
+{" "}
+<Step title="Base Network Assets">
+  - **ETH**: ~0.001 ETH for gas fees (approval transaction) - **USDC**: ~$10
+  USDC for fees (covers ~10,000 settlements)
+</Step>
+
+  <Step title="Network Selection">
+    Choose Base Mainnet (production) or Base Sepolia (testing)
+  </Step>
+</Steps>
+
+## Step 1: Get Testnet Assets (For Testing)
+
+If testing on Base Sepolia first (recommended):
+
+### Get Base Sepolia ETH
+
+Visit the Coinbase faucet:
+
+```
+https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet
+```
+
+- Connect your merchant wallet
+- Request 0.05 ETH (free, once per 24 hours)
+- Wait ~30 seconds for confirmation
+
+### Get Base Sepolia USDC
+
+Visit the Circle faucet:
+
+```
+https://faucet.circle.com/
+```
+
+- Select "Base Sepolia"
+- Enter your merchant address
+- Request 10 USDC
+- Wait ~1 minute for confirmation
+
+<Check>
+  Verify you received the tokens on [BaseScan
+  Sepolia](https://sepolia.basescan.org)
+</Check>
+
+---
+
+## Step 2: Approve USDC Spending
+
+This is the **only required setup step**. You must approve 0xmeta's treasury to collect the $0.001 fee per settlement.
+
+### Option A: Using Our Setup Script (Recommended)
+
+If you're using our merchant demo:
+
+```bash
+# Navigate to merchant demo directory
+cd merchant_demo
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run approval setup
+python -m app.merchant_approval \
+  --network base-sepolia \
+  --amount 1000 \
+  --auto-confirm
+```
+
+**What this does:**
+
+1. Connects to Base Sepolia RPC
+2. Checks your current USDC allowance
+3. Approves treasury to spend 1000 USDC
+4. Returns transaction hash
+
+**Expected output:**
+
+```
+================================================================================
+0xmeta Merchant Approval Setup
+================================================================================
+
+🔍 Checking merchant USDC approval status...
+✅ Connected to RPC: https://base-sepolia-rpc.publicnode.com
+❌ Merchant approval: NOT SET
+   Current allowance: 0.00 USDC
+   Facilitator: 0xa92560dcaf2fb556dfee4d2599f021a511b94aae
+
+🔐 Auto-setting up approval for 1000 USDC...
+✅ Transaction sent: 0x1234...
+⏳ Waiting for confirmation...
+✅ Approval successful!
+   Transaction: 0x1234...
+   New allowance: 1000.00 USDC
+   Estimated transactions: ~100,000
+
+🎉 Setup complete! 0xmeta can now collect settlement fees.
+```
+
+### Option B: Manual Approval (via ethers.js)
+
+```javascript
+const { ethers } = require("ethers");
+
+// Configuration
+const NETWORK = "base-sepolia";
+const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+const TREASURY_ADDRESS = "0xa92560dcaf2fb556dfee4d2599f021a511b94aae";
+const RPC_URL = "https://sepolia.base.org";
+
+// Setup provider and signer
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const wallet = new ethers.Wallet(process.env.MERCHANT_PRIVATE_KEY, provider);
+
+// USDC contract ABI (approve function)
+const usdcAbi = [
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+];
+
+async function setupApproval() {
+  const usdc = new ethers.Contract(USDC_ADDRESS, usdcAbi, wallet);
+
+  // Check current allowance
+  const currentAllowance = await usdc.allowance(
+    wallet.address,
+    TREASURY_ADDRESS
+  );
+
+  console.log(
+    "Current allowance:",
+    ethers.formatUnits(currentAllowance, 6),
+    "USDC"
+  );
+
+  // Approve 1000 USDC (1000 * 10^6)
+  const approvalAmount = ethers.parseUnits("1000", 6);
+
+  console.log("Approving", ethers.formatUnits(approvalAmount, 6), "USDC...");
+
+  const tx = await usdc.approve(TREASURY_ADDRESS, approvalAmount);
+  console.log("Transaction sent:", tx.hash);
+
+  await tx.wait();
+  console.log("✅ Approval confirmed!");
+
+  // Verify new allowance
+  const newAllowance = await usdc.allowance(wallet.address, TREASURY_ADDRESS);
+  console.log("New allowance:", ethers.formatUnits(newAllowance, 6), "USDC");
+}
+
+setupApproval().catch(console.error);
+```
+
+### Option C: Via Web3.py
+
+```python
+from web3 import Web3
+from eth_account import Account
+import os
+
+# Configuration
+NETWORK = 'base-sepolia'
+USDC_ADDRESS = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+TREASURY_ADDRESS = '0xa92560dcaf2fb556dfee4d2599f021a511b94aae'
+RPC_URL = 'https://sepolia.base.org'
+
+# Setup Web3
+w3 = Web3(Web3.HTTPProvider(RPC_URL))
+account = Account.from_key(os.getenv('MERCHANT_PRIVATE_KEY'))
+
+# USDC contract
+usdc_abi = [
+    {
+        'constant': False,
+        'inputs': [
+            {'name': '_spender', 'type': 'address'},
+            {'name': '_value', 'type': 'uint256'}
+        ],
+        'name': 'approve',
+        'outputs': [{'name': '', 'type': 'bool'}],
+        'type': 'function'
+    }
+]
+
+usdc = w3.eth.contract(address=Web3.to_checksum_address(USDC_ADDRESS), abi=usdc_abi)
+
+# Approve 1000 USDC
+approval_amount = 1000 * 10**6  # 1000 USDC (6 decimals)
+
+tx = usdc.functions.approve(
+    Web3.to_checksum_address(TREASURY_ADDRESS),
+    approval_amount
+).build_transaction({
+    'from': account.address,
+    'nonce': w3.eth.get_transaction_count(account.address),
+    'gas': 100000,
+    'gasPrice': w3.eth.gas_price
+})
+
+signed_tx = account.sign_transaction(tx)
+tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+print(f'Transaction sent: {tx_hash.hex()}')
+receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+print(f'✅ Approval confirmed!')
+```
+
+---
+
+## Step 3: Verify Setup
+
+Check that approval was successful:
+
+```bash
+# Using our script
+python -m app.merchant_approval --network base-sepolia --check-only
+```
+
+**Expected output:**
+
+```
+✅ Merchant approval: OK
+   Current allowance: 1000.00 USDC
+   Facilitator: 0xa92560dcaf2fb556dfee4d2599f021a511b94aae
+   Estimated transactions: ~100,000
+```
+
+### Or check on BaseScan
+
+Visit:
+
+```
+https://sepolia.basescan.org/token/0x036CbD53842c5426634e7929541eC2318f3dCF7e?a=YOUR_MERCHANT_ADDRESS
+```
+
+Look for "Approve" transaction to treasury address.
+
+---
+
+## Step 4: Integrate API
+
+Now you're ready to accept payments! Here's a complete example:
+
+```javascript
+// Client-side: User creates authorization
+const authorization = {
+  from: userAddress,
+  to: merchantAddress,
+  value: "10000", // 0.01 USDC
+  validAfter: "0",
+  validBefore: String(Math.floor(Date.now() / 1000) + 86400), // 24h
+  nonce: generateRandomNonce(),
+  token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+};
+
+const signature = await ethereum.request({
+  method: "eth_signTypedData_v4",
+  params: [userAddress, JSON.stringify(typedData)],
+});
+
+// Server-side: Verify and settle
+// 1. Verify
+const verifyResponse = await fetch("https://facilitator.0xmeta.ai/v1/verify", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    transaction_hash: authorization.nonce,
+    chain: "base-sepolia",
+    seller_address: merchantAddress,
+    expected_amount: "10000",
+    expected_token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    metadata: {
+      source: "my_app",
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "base-sepolia",
+        payload: { authorization, signature },
+      },
+    },
+  }),
+});
+
+const { verification_id } = await verifyResponse.json();
+
+// 2. Settle
+const settleResponse = await fetch("https://facilitator.0xmeta.ai/v1/settle", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    verification_id,
+    destination_address: merchantAddress,
+  }),
+});
+
+const { settlement_id } = await settleResponse.json();
+
+// 3. Poll for status
+const settlement = await waitForSettlement(settlement_id);
+console.log("Payment complete!", settlement.settlement_tx_hash);
+```
+
+---
+
+## Step 5: Production Deployment
+
+When ready for production:
+
+### Switch to Base Mainnet
+
+Update your configuration:
+
+```javascript
+// Production config
+const config = {
+  network: "base",
+  chainId: 8453,
+  usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  rpcUrl: "https://mainnet.base.org",
+};
+```
+
+### Run Approval on Mainnet
+
+```bash
+# Get real USDC and ETH first!
+python -m app.merchant_approval \
+  --network base \
+  --amount 10000 \
+  --auto-confirm
+```
+
+<Warning>
+  **Production checklist:** - ✅ Merchant wallet has real ETH for gas - ✅
+  Merchant wallet has real USDC for fees - ✅ Approval transaction confirmed -
+  ✅ Test with small payment first ($1) - ✅ Monitor settlements closely
+</Warning>
+
+---
+
+## Network Information
+
+### Base Sepolia (Testnet)
+
+| Resource     | Value                                                         |
+| ------------ | ------------------------------------------------------------- |
+| **Chain ID** | `84532`                                                       |
+| **USDC**     | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                  |
+| **Treasury** | `0xa92560dcaf2fb556dfee4d2599f021a511b94aae`                  |
+| **RPC**      | `https://sepolia.base.org`                                    |
+| **Explorer** | `https://sepolia.basescan.org`                                |
+| **Faucet**   | https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet |
+
+### Base Mainnet (Production)
+
+| Resource     | Value                                        |
+| ------------ | -------------------------------------------- |
+| **Chain ID** | `8453`                                       |
+| **USDC**     | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| **Treasury** | `0xa92560dcaf2fb556dfee4d2599f021a511b94aae` |
+| **RPC**      | `https://mainnet.base.org`                   |
+| **Explorer** | `https://basescan.org`                       |
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Approval transaction fails">
+    **Causes:**
+    - Insufficient ETH for gas
+    - Wrong network selected
+    - Invalid treasury address
+    
+    **Solution:**
+    - Check ETH balance: Must have ~0.001 ETH
+    - Verify you're on correct network
+    - Double-check treasury address
+  </Accordion>
+
+{" "}
+<Accordion title="Settlement fails with 'insufficient_allowance'">
+  **Cause:** Approval wasn't successful or amount too low **Solution:** ```bash
+  # Check current allowance python -m app.merchant_approval --network
+  base-sepolia --check-only # If zero, run approval again python -m
+  app.merchant_approval --network base-sepolia --amount 1000 ```
+</Accordion>
+
+  <Accordion title="Can't connect to RPC">
+    **Cause:** Network issues or RPC rate limiting
+    
+    **Solution:**
+    - Our script tries multiple RPC endpoints automatically
+    - Wait a few minutes and try again
+    - Use custom RPC (Alchemy, Infura, QuickNode)
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore all endpoints
+  </Card>
+
+{" "}
+<Card title="Integration Examples" icon="code" href="/integration/nodejs">
+  View code examples
+</Card>
+
+{" "}
+<Card title="Best Practices" icon="lightbulb" href="/guides/best-practices">
+  Production tips
+</Card>
+
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Common issues
+  </Card>
+</CardGroup>
+
+<Check>**You're all set!** Start accepting x402 payments with 0xmeta.</Check>

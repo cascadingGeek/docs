@@ -52,10 +52,6 @@
   "navigation": {
     "groups": [
       {
-        "group": "Overview",
-        "pages": ["micro-protocols"]
-      },
-      {
         "group": "Get Started",
         "pages": ["quickstart", "pricing"]
       },
@@ -65,20 +61,17 @@
           "api-reference/introduction",
           "api-reference/verify",
           "api-reference/settle",
-          "api-reference/status",
           "api-reference/webhooks",
           "api-reference/errors"
         ]
       },
       {
+        "group": "Micro Protocols",
+        "pages": ["overview"]
+      },
+      {
         "group": "Guides",
-        "pages": [
-          "guides/getting-started",
-          "guides/idempotency",
-          "guides/webhooks-setup",
-          "guides/multi-chain",
-          "guides/best-practices"
-        ]
+        "pages": ["guides/multi-chain"]
       },
       {
         "group": "Integration Examples",
@@ -86,20 +79,11 @@
       },
       {
         "group": "Advanced",
-        "pages": [
-          "advanced/background-workers",
-          "advanced/rate-limiting",
-          "advanced/monitoring",
-          "advanced/production"
-        ]
-      },
-      {
-        "group": "Playground",
-        "openapi": "/openapi.json"
+        "pages": ["advanced/background-workers"]
       },
       {
         "group": "Support",
-        "pages": ["troubleshooting", "faq"]
+        "pages": ["faq"]
       }
     ]
   },

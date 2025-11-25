@@ -12,8 +12,9 @@ pip install requests fastapi uvicorn
 ```
 
 <Note>
-  This guide uses the `requests` library for the client. For async operations, consider using
-  `httpx` or `aiohttp`. FastAPI is used for the web framework examples.
+  This guide uses the `requests` library for the client. For async operations,
+  consider using `httpx` or `aiohttp`. FastAPI is used for the web framework
+  examples.
 </Note>
 
 ## Setup
@@ -29,7 +30,7 @@ from typing import Optional, Dict, Any
 class ZeroXMetaClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.base_url = 'https://facilitator.api.0xmeta.ai/v1'
+        self.base_url = 'https://facilitator.0xmeta.ai/v1'
         self.session = requests.Session()
         self.session.headers.update({
             'Content-Type': 'application/json',
@@ -204,7 +205,7 @@ async def verify_payment(
     try:
         # Get base URL from request
         base_url = f"{request.url.scheme}://{request.url.netloc}"
-        
+
         verification = client.verify_payment(
             transaction_hash=data.transaction_hash,
             chain=data.chain,
@@ -438,7 +439,7 @@ import asyncio
 class AsyncZeroXMetaClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.base_url = 'https://facilitator.api.0xmeta.ai/v1'
+        self.base_url = 'https://facilitator.0xmeta.ai/v1'
         self.client = httpx.AsyncClient(
             headers={
                 'Content-Type': 'application/json',
@@ -515,10 +516,10 @@ async def webhook_handler(
 ):
     # Get raw body for signature verification
     body = await request.body()
-    
+
     if not verify_webhook_signature(body, x_signature, WEBHOOK_SECRET):
         raise HTTPException(status_code=401, detail='Invalid signature')
-    
+
     # Process webhook...
     data = json.loads(body)
     return {'received': True}

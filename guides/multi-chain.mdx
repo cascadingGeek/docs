@@ -50,7 +50,7 @@ Use these exact values in the `chain` parameter:
 
 ```javascript
 async function verifyPayment(txHash, chain, amount) {
-  const response = await fetch("https://facilitator.api.0xmeta.ai/v1/verify", {
+  const response = await fetch("https://facilitator.0xmeta.ai/v1/verify", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -131,17 +131,17 @@ Both networks support both native tokens (ETH) and ERC20 tokens:
 
 ### USDC
 
-| Network | Address                                      |
-| -------- | -------------------------------------------- |
+| Network      | Address                                      |
+| ------------ | -------------------------------------------- |
 | Base Mainnet | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 
 ### DAI
 
-| Network | Address                                      |
-| -------- | -------------------------------------------- |
+| Network      | Address                                      |
+| ------------ | -------------------------------------------- |
 | Base Mainnet | `0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb` |
-| Base Sepolia | Check testnet token list |
+| Base Sepolia | Check testnet token list                     |
 
 ## Testing on Base Sepolia
 
@@ -230,17 +230,22 @@ function getExplorerUrl(chain, txHash) {
     Base has 100x lower fees than Ethereum mainnet, making it perfect for high-frequency transactions
   </Accordion>
 
-  <Accordion title="Fast Settlement">
-    Base settles in seconds vs minutes on Ethereum mainnet
-  </Accordion>
+{" "}
+<Accordion title="Fast Settlement">
+  Base settles in seconds vs minutes on Ethereum mainnet
+</Accordion>
 
-  <Accordion title="Coinbase Backing">
-    Built by Coinbase, Base offers enterprise-grade reliability and security
-  </Accordion>
+{" "}
+<Accordion title="Coinbase Backing">
+  Built by Coinbase, Base offers enterprise-grade reliability and security
+</Accordion>
 
   <Accordion title="Ethereum Compatibility">
     Full EVM compatibility means you can use existing Ethereum tooling and contracts
   </Accordion>
 </AccordionGroup>
 
-<Info>All Base networks use the same API - just change the `chain` parameter between `base` and `base-sepolia`!</Info>
+<Info>
+  All Base networks use the same API - just change the `chain` parameter between
+  `base` and `base-sepolia`!
+</Info>

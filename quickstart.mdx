@@ -1,41 +1,108 @@
 ---
 title: "Quickstart"
-description: "Get started with 0xmeta.ai in under 5 minutes - no signup required!"
+description: "Get started with 0xmeta.ai in under 5 minutes - truly permissionless!"
 ---
 
 ## 🚀 Start Building Immediately
 
-0xmeta.ai requires **zero setup**. No account creation, no API keys, no configuration files.
+0xmeta.ai requires **zero setup**. No account creation, no API keys, no complicated onboarding.
 
-Just start making requests to accept x402 payments on Base network!
+Just start making requests to facilitate x402 payments on Base network!
 
 <Note>
-  **Truly permissionless**: You can verify and settle payments without any
-  authentication. Just call our API endpoints.
+  **Truly permissionless**: Verify and settle x402 payments without any
+  authentication. Our API is as open as the blockchain itself.
 </Note>
 
 ---
 
-## Step 1: Verify a Payment
+## Understanding the Flow
 
-When a customer makes a payment, verify it on-chain:
+0xmeta facilitates **EIP-3009 transferWithAuthorization** payments - a gasless payment method where users sign authorizations instead of sending transactions.
 
-```bash
-curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_hash": "0x1234567890abcdef...",
-    "chain": "base",
-    "seller_address": "0xYourWalletAddress",
-    "expected_amount": "1000000",
-    "expected_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-  }'
+```mermaid
+sequenceDiagram
+    participant User
+    participant Merchant
+    participant 0xmeta
+    participant Provider
+    participant Blockchain
+
+    User->>User: Sign EIP-3009 Authorization<br/>(NO gas required)
+    User->>Merchant: Send authorization + signature
+
+    Merchant->>0xmeta: POST /v1/verify<br/>(Validate signature)
+    0xmeta-->>Merchant: ✅ Verified
+
+    Merchant->>0xmeta: POST /v1/settle<br/>(Execute payment)
+    0xmeta->>0xmeta: Collect $0.001 fee<br/>(via USDC allowance)
+    0xmeta->>Provider: Execute transferWithAuthorization
+    Provider->>Blockchain: Submit transaction
+    Blockchain-->>Provider: ✅ Confirmed
+    Provider-->>0xmeta: Settlement complete
+    0xmeta-->>Merchant: ✅ Payment settled
+
+    Note over Merchant: Merchant receives funds
+```
+
+---
+
+## Step 1: User Creates Authorization
+
+Your user signs an EIP-3009 authorization (client-side, no gas):
+
+```javascript
+// Client-side: User signs authorization
+const authorization = {
+  from: userAddress,
+  to: merchantAddress,
+  value: "10000", // 0.01 USDC (6 decimals)
+  validAfter: "0",
+  validBefore: String(Math.floor(Date.now() / 1000) + 86400), // 24h validity
+  nonce: generateRandomNonce(), // Unique per payment
+};
+
+// User signs with MetaMask (NO gas required)
+const signature = await ethereum.request({
+  method: "eth_signTypedData_v4",
+  params: [userAddress, JSON.stringify(typedData)],
+});
 ```
 
 <Tip>
-  The `expected_token` is USDC on Base:
-  `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+  See our [merchant demo](https://github.com/0xmetaHQ/merchant_demo) for
+  complete client-side implementation.
 </Tip>
+
+---
+
+## Step 2: Verify the Authorization
+
+Validate that the authorization is properly signed:
+
+```bash
+curl -X POST https://facilitator.0xmeta.ai/v1/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction_hash": "NONCE_HASH",
+    "chain": "base-sepolia",
+    "seller_address": "0xYourMerchantAddress",
+    "expected_amount": "10000",
+    "expected_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "metadata": {
+      "source": "your_app",
+      "paymentPayload": {
+        "x402Version": 1,
+        "scheme": "exact",
+        "network": "base-sepolia",
+        "payload": {
+          "authorization": { /* ... */ },
+          "signature": "0x..."
+        }
+      }
+    }
+  }'
+```
 
 ### Response
 
@@ -43,38 +110,29 @@ curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
 {
   "verification_id": "vrf_abc123xyz",
   "status": "verified",
-  "transaction_hash": "0x1234567890abcdef...",
-  "chain": "base",
-  "verified_amount": "1000000",
-  "verified_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  "seller_address": "0xYourWalletAddress",
-  "verified_at": "2025-01-15T10:30:00Z"
+  "transaction_hash": "0x...",
+  "chain": "base-sepolia",
+  "verified_amount": "10000",
+  "verified_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "seller_address": "0xYourMerchantAddress",
+  "verified_at": "2025-11-24T10:30:00Z"
 }
 ```
 
-<Check>**Verification is FREE** - no fees charged for verifying payments</Check>
+<Check>**Verification is FREE** - no fees charged</Check>
 
 ---
 
-## Step 2: Settle the Payment
+## Step 3: Settle the Payment
 
-Use the `verification_id` to settle and receive funds:
+Execute the on-chain settlement via Provider:
 
 ```bash
-curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
+curl -X POST https://facilitator.0xmeta.ai/v1/settle \
   -H "Content-Type: application/json" \
   -d '{
     "verification_id": "vrf_abc123xyz",
-    "destination_address": "0xYourWalletAddress",
-    "payment_payload": {
-      "from": "0xCustomerAddress",
-      "validBefore": 1735689600,
-      "validAfter": 0,
-      "nonce": "0x...",
-      "v": 28,
-      "r": "0x...",
-      "s": "0x..."
-    }
+    "destination_address": "0xYourMerchantAddress"
   }'
 ```
 
@@ -85,33 +143,26 @@ curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
   "settlement_id": "stl_def456uvw",
   "verification_id": "vrf_abc123xyz",
   "status": "pending",
-  "transaction_hash": "0xabcdef1234567890...",
-  "destination_address": "0xYourWalletAddress",
-  "fee_info": {
-    "fee_amount_usd": 7.5,
-    "fee_percentage": 0.75,
-    "net_amount_usd": 992.5,
-    "rate": 0.75,
-    "settlement_method": "smart_contract",
-    "contract_address": "0xSettlementSplitterAddress"
-  },
-  "created_at": "2025-01-15T10:31:00Z"
+  "transaction_hash": null,
+  "destination_address": "0xYourMerchantAddress",
+  "created_at": "2025-11-24T10:31:00Z"
 }
 ```
 
 <Info>
-  **Settlement Fee**: 0.75% (minimum $1) is automatically deducted by our smart
-  contract. You receive the net amount directly to your wallet.
+  **Settlement Fee**: $0.001 flat fee (0.001 USDC) collected automatically via
+  USDC allowance. You must approve 0xmeta to spend USDC before settlements can
+  process.
 </Info>
 
 ---
 
-## Step 3: Check Settlement Status
+## Step 4: Check Settlement Status
 
 Monitor settlement progress:
 
 ```bash
-curl https://facilitator.api.0xmeta.ai/v1/settlements/stl_def456uvw
+curl https://facilitator.0xmeta.ai/v1/settlements/stl_def456uvw
 ```
 
 ### Response
@@ -119,105 +170,75 @@ curl https://facilitator.api.0xmeta.ai/v1/settlements/stl_def456uvw
 ```json
 {
   "id": "stl_def456uvw",
-  "type": "settlement",
   "status": "settled",
-  "transaction_hash": "0xabcdef1234567890...",
-  "created_at": "2025-01-15T10:31:00Z",
-  "settled_at": "2025-01-15T10:32:15Z",
+  "transaction_hash": "0xabcdef123...",
+  "settled_at": "2025-11-24T10:32:15Z",
   "details": {
     "verification_id": "vrf_abc123xyz",
-    "destination_address": "0xYourWalletAddress",
-    "settled_amount": "1000000",
-    "fee_amount_usd": 7.5,
-    "net_amount_usd": 992.5,
-    "fee_collection_status": "collected"
+    "destination_address": "0xYourMerchantAddress",
+    "settled_amount": "10000",
+    "fee_collection_status": "success"
   }
 }
 ```
 
-<Check>Settlements typically complete in **1-5 minutes** on Base network</Check>
+<Check>
+  Settlements typically complete in **30-60 seconds** on Base network
+</Check>
 
 ---
 
-## Optional: Set Up Webhooks
+## One-Time Setup: Approve Fee Collection
 
-Receive real-time notifications when settlements complete:
+Before your first settlement, approve 0xmeta to collect fees:
 
-```bash
-curl -X POST https://facilitator.api.0xmeta.ai/v1/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_hash": "0x...",
-    "chain": "base",
-    "seller_address": "0xYourWalletAddress",
-    "expected_amount": "1000000",
-    "webhook_url": "https://yourdomain.com/webhooks/settlement"
-  }'
-```
+```javascript
+// One-time setup: Approve USDC spending
+const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Base Sepolia
+const TREASURY_ADDRESS = "0xa92560dcaf2fb556dfee4d2599f021a511b94aae";
 
-### Webhook Payload
+const usdcContract = new ethers.Contract(USDC_ADDRESS, USDCAbi, signer);
 
-When settlement completes, you'll receive:
-
-```json
-{
-  "event": "settlement.completed",
-  "settlement_id": "stl_def456uvw",
-  "verification_id": "vrf_abc123xyz",
-  "transaction_hash": "0xabcdef1234567890...",
-  "status": "settled",
-  "amount": 1000000,
-  "currency": "USDC",
-  "fee_info": {
-    "fee_amount_usd": 7.5,
-    "net_amount_usd": 992.5,
-    "rate": 0.75
-  },
-  "destination_address": "0xYourWalletAddress",
-  "settled_at": "2025-01-15T10:32:15Z"
-}
+// Approve $10 worth of fees (~10,000 settlements)
+await usdcContract.approve(TREASURY_ADDRESS, ethers.parseUnits("10", 6));
 ```
 
 <Warning>
-  Verify webhook signatures using our HMAC validation to ensure authenticity.
-  See [Webhook Security](/guides/webhooks-setup)
+  **Important:** Merchants must approve USDC spending before settlements.
+  Without approval, settlements will fail at the fee collection step.
 </Warning>
 
 ---
 
-## Understanding the Flow
+## Settlement Flow Diagram
 
-Here's what happens when you use 0xmeta.ai:
+```mermaid
+sequenceDiagram
+    participant Merchant
+    participant 0xmeta
+    participant Treasury
+    participant Provider
+    participant Blockchain
 
-<Steps>
-  <Step title="Customer Authorizes Payment">
-    Customer signs an EIP-3009 authorization on the client side. This
-    authorization is directed to our **SettlementSplitter smart contract** (not
-    directly to you).
-  </Step>
+    Merchant->>0xmeta: POST /v1/settle
+    Note over 0xmeta: Status: pending
 
-  <Step title="You Verify the Payment">
-    Call `/v1/verify` to confirm the transaction is valid and the authorization
-    is properly signed. This is **free** and instant.
-  </Step>
+    0xmeta->>Treasury: transferFrom(merchant, $0.001)
 
-  <Step title="You Initiate Settlement">
-    Call `/v1/settle` with the EIP-3009 signature. Our backend communicates with
-    the 1Shot API to execute the smart contract.
-  </Step>
-
-  <Step title="Smart Contract Splits Funds">
-    The SettlementSplitter contract: 1. Receives the full payment from the
-    customer 2. Calculates 0.75% fee (minimum $1) 3. Sends fee to 0xmeta
-    treasury 4. Sends remaining 99.25% to your address. All in **one atomic
-    transaction**.
-  </Step>
-
-  <Step title="You Receive Funds">
-    Your wallet receives the net amount (after fees) in 1-5 minutes. Check
-    BaseScan to see both transfers on-chain.
-  </Step>
-</Steps>
+    alt Fee Collection Success
+        Treasury-->>0xmeta: ✅ Fee collected
+        0xmeta->>Provider: Execute transferWithAuthorization
+        Provider->>Blockchain: Submit transaction
+        Blockchain-->>Provider: ✅ Confirmed
+        Provider-->>0xmeta: Settlement complete
+        Note over 0xmeta: Status: settled
+        0xmeta-->>Merchant: ✅ Settlement successful
+    else Insufficient Allowance
+        Treasury-->>0xmeta: ❌ Insufficient allowance
+        Note over 0xmeta: Status: failed<br/>fee_collection_status: failed_insufficient_allowance
+        0xmeta-->>Merchant: ❌ Approval required
+    end
+```
 
 ---
 
@@ -228,141 +249,88 @@ Here's what happens when you use 0xmeta.ai:
     Start using the API immediately without creating an account
   </Card>
 
-  <Card title="No API Keys" icon="key-slash">
-    All endpoints are publicly accessible - no authentication needed
-  </Card>
+{" "}
 
-  <Card title="No Rate Limits" icon="infinity">
-    Use as much as you need without quotas or throttling
-  </Card>
+<Card title="No API Keys" icon="key-slash">
+  All endpoints are publicly accessible
+</Card>
+
+{" "}
+
+<Card title="No Rate Limits" icon="infinity">
+  Use as much as you need (reasonable use)
+</Card>
 
   <Card title="No Lock-In" icon="unlock">
-    No accounts means no platform lock-in or restrictions
+    No accounts means no platform restrictions
   </Card>
 </CardGroup>
 
 <Note>
-  **Why no authentication?** We believe payment facilitation should be as
-  permissionless as the blockchain itself. Anyone should be able to accept
-  payments without barriers.
+  **Why no authentication?** Payment facilitation should be as permissionless as
+  the blockchain itself. Anyone should be able to accept x402 payments without
+  barriers.
 </Note>
-
----
-
-## Fee Estimation
-
-Want to know fees before settling? Use our estimation endpoint:
-
-```bash
-curl "https://facilitator.api.0xmeta.ai/v1/pricing/estimate?amount=1000&chain=base"
-```
-
-### Response
-
-```json
-{
-  "amount_usd": 1000.0,
-  "fee_amount_usd": 7.5,
-  "fee_percentage": 0.75,
-  "net_amount_usd": 992.5,
-  "minimum_fee_applied": false,
-  "chain": "base"
-}
-```
-
----
-
-## Idempotency
-
-Prevent duplicate settlements by using idempotency keys:
-
-```bash
-curl -X POST https://facilitator.api.0xmeta.ai/v1/settle \
-  -H "Content-Type: application/json" \
-  -H "X-Idempotency-Key: unique-key-12345" \
-  -d '{
-    "verification_id": "vrf_abc123xyz",
-    "destination_address": "0xYourWalletAddress"
-  }'
-```
-
-If you retry the same request with the same idempotency key, you'll receive the original response instead of creating a duplicate settlement.
-
-<Tip>Use UUIDs or transaction hashes as idempotency keys</Tip>
 
 ---
 
 ## Supported Networks
 
-Currently, we support:
+Currently supporting Base networks:
 
-| Network      | Chain ID | Status        |
-| ------------ | -------- | ------------- |
-| Base Mainnet | 8453     | ✅ Production |
-| Base Sepolia | 84532    | ✅ Testing    |
-
-<Note>More networks coming soon! Follow our [roadmap](/resources/roadmap)</Note>
+| Network      | Chain ID | USDC Address                                 | Status        |
+| ------------ | -------- | -------------------------------------------- | ------------- |
+| Base Mainnet | 8453     | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | ✅ Production |
+| Base Sepolia | 84532    | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | ✅ Testing    |
 
 ---
 
 ## Example: Complete Integration
 
-Here's a complete TypeScript example:
-
 ```typescript
-// 1. Verify payment
-const verifyResponse = await fetch(
-  "https://facilitator.api.0xmeta.ai/v1/verify",
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      transaction_hash: "0x...",
-      chain: "base",
-      seller_address: "0xYourAddress",
-      expected_amount: "1000000", // 1 USDC
-      expected_token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    }),
-  }
-);
+// 1. Verify EIP-3009 authorization
+const verifyResponse = await fetch("https://facilitator.0xmeta.ai/v1/verify", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    transaction_hash: authorization.nonce,
+    chain: "base-sepolia",
+    seller_address: merchantAddress,
+    expected_amount: "10000",
+    expected_token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    metadata: {
+      source: "my_app",
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "base-sepolia",
+        payload: { authorization, signature },
+      },
+    },
+  }),
+});
 
 const { verification_id } = await verifyResponse.json();
 
 // 2. Settle payment
-const settleResponse = await fetch(
-  "https://facilitator.api.0xmeta.ai/v1/settle",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Idempotency-Key": `settlement-${Date.now()}`,
-    },
-    body: JSON.stringify({
-      verification_id,
-      destination_address: "0xYourAddress",
-      payment_payload: {
-        from: customerAddress,
-        validBefore: Math.floor(Date.now() / 1000) + 3600,
-        validAfter: 0,
-        nonce: "0x...",
-        v,
-        r,
-        s, // From customer's EIP-3009 signature
-      },
-    }),
-  }
-);
+const settleResponse = await fetch("https://facilitator.0xmeta.ai/v1/settle", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    verification_id,
+    destination_address: merchantAddress,
+  }),
+});
 
 const settlement = await settleResponse.json();
 
 // 3. Check status
 const statusResponse = await fetch(
-  `https://facilitator.api.0xmeta.ai/v1/settlements/${settlement.settlement_id}`
+  `https://facilitator.0xmeta.ai/v1/settlements/${settlement.settlement_id}`
 );
 
 const status = await statusResponse.json();
 console.log("Settlement status:", status.status);
-console.log("You receive:", status.details.net_amount_usd);
 ```
 
 ---
@@ -374,13 +342,17 @@ console.log("You receive:", status.details.net_amount_usd);
     Complete API documentation
   </Card>
 
-  <Card title="Webhooks Setup" icon="webhook" href="/guides/webhooks-setup">
-    Set up real-time notifications
-  </Card>
+{" "}
 
-  <Card title="Pricing Details" icon="dollar-sign" href="/pricing">
-    Learn about fees and smart contract splits
-  </Card>
+<Card title="Merchant Setup" icon="store" href="/guides/getting-started">
+  Set up USDC approval for fees
+</Card>
+
+{" "}
+
+<Card title="Pricing Details" icon="dollar-sign" href="/pricing">
+  Learn about the $0.001 flat fee
+</Card>
 
   <Card title="Best Practices" icon="lightbulb" href="/guides/best-practices">
     Production tips and tricks
@@ -392,25 +364,25 @@ console.log("You receive:", status.details.net_amount_usd);
 ## Need Help?
 
 <CardGroup cols={2}>
-  <Card title="Join Discord" icon="discord" href="https://discord.gg/0xmeta">
-    Get help from our community
-  </Card>
-
-  <Card
-    title="View Examples"
-    icon="code"
-    href="https://github.com/0xmeta/examples"
-  >
+  <Card title="View Examples" icon="code" href="https://github.com/0xmetaHQ/examples">
     Check out code examples
   </Card>
 
-  <Card
-    title="Smart Contract"
-    icon="file-contract"
-    href="https://github.com/0xmeta/contracts"
-  >
-    View our open-source contracts
-  </Card>
+{" "}
+
+<Card
+  title="Merchant Demo"
+  icon="store"
+  href="https://merchant-demo-six.vercel.app/"
+>
+  Complete working example
+</Card>
+
+{" "}
+
+<Card title="x402 Protocol" icon="link" href="https://www.x402.org">
+  Learn about x402 payments
+</Card>
 
   <Card title="Contact Support" icon="envelope" href="mailto:support@0xmeta.ai">
     Email us your questions

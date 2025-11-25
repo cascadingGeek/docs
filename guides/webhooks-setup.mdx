@@ -52,7 +52,7 @@ sequenceDiagram
 Include `webhook_url` when verifying payment:
 
 ```javascript
-const response = await fetch("https://facilitator.api.0xmeta.ai/v1/verify", {
+const response = await fetch("https://facilitator.0xmeta.ai/v1/verify", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -275,6 +275,7 @@ When settlement completes, you'll receive:
   </Step>
 
 {" "}
+
 <Step title="Use HTTPS">
   Webhook URLs must use HTTPS in production ❌ `http://your-app.com/webhooks` ✅
   `https://your-app.com/webhooks`
@@ -375,6 +376,7 @@ if (failedWebhooks > 5) {
   </Accordion>
 
 {" "}
+
 <Accordion title="Signature verification fails">
   **Fix**: 1. Ensure you're using correct secret 2. Serialize payload the same
   way (sorted keys, no spaces) 3. Use constant-time comparison 4. Check for
@@ -382,6 +384,7 @@ if (failedWebhooks > 5) {
 </Accordion>
 
 {" "}
+
 <Accordion title="Timeout errors">
   **Fix**: 1. Return 200 immediately 2. Process async 3. Don't do long
   operations in webhook handler

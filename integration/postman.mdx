@@ -16,16 +16,16 @@ description: "Complete guide to using 0xmeta.ai API with Postman"
 
 Create a new environment in Postman with the following variables:
 
-| Variable           | Initial Value                          | Current Value                          | Description                               |
-| ------------------ | -------------------------------------- | -------------------------------------- | ----------------------------------------- |
-| `base_url`         | `https://facilitator.api.0xmeta.ai/v1` | `https://facilitator.api.0xmeta.ai/v1` | API base URL                              |
-| `api_key`          | `your_api_key_here`                    | `your_api_key_here`                    | Your API key                              |
-| `transaction_hash` | `0x...`                                | `0x...`                                | Transaction hash to verify                |
-| `chain`            | `base`                                 | `base`                                 | Blockchain network (base or base-sepolia) |
-| `seller_address`   | `0x...`                                | `0x...`                                | Seller's wallet address                   |
-| `expected_amount`  | `1000000000000000000`                  | `1000000000000000000`                  | Expected amount in wei                    |
-| `verification_id`  |                                        |                                        | Verification ID (auto-set)                |
-| `settlement_id`    |                                        |                                        | Settlement ID (auto-set)                  |
+| Variable           | Initial Value                      | Current Value                      | Description                               |
+| ------------------ | ---------------------------------- | ---------------------------------- | ----------------------------------------- |
+| `base_url`         | `https://facilitator.0xmeta.ai/v1` | `https://facilitator.0xmeta.ai/v1` | API base URL                              |
+| `api_key`          | `your_api_key_here`                | `your_api_key_here`                | Your API key                              |
+| `transaction_hash` | `0x...`                            | `0x...`                            | Transaction hash to verify                |
+| `chain`            | `base`                             | `base`                             | Blockchain network (base or base-sepolia) |
+| `seller_address`   | `0x...`                            | `0x...`                            | Seller's wallet address                   |
+| `expected_amount`  | `1000000000000000000`              | `1000000000000000000`              | Expected amount in wei                    |
+| `verification_id`  |                                    |                                    | Verification ID (auto-set)                |
+| `settlement_id`    |                                    |                                    | Settlement ID (auto-set)                  |
 
 <Note>
   Set your `api_key` in the environment variables before making requests.
