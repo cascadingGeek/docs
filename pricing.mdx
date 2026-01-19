@@ -1,243 +1,510 @@
-## Simple Flat-Rate Pricing
+---
+title: "Pricing"
+description: "Simple, transparent pricing with automatic fee collection"
+---
 
-0xmeta.ai charges a **simple flat fee per settlement**. No percentages, no surprises.
+## Overview
 
-POST https://facilitator.0xmeta.ai/v1/verify → FREE
+0xmeta uses a **flat $0.01 USDC fee** per settlement with **automatic collection** via treasury-first architecture. No setup required, no merchant USDC approvals, zero surprises.
 
-POST https://facilitator.0xmeta.ai/v1/settle → $0.001 flat fee
+<Check>
+**Verification is FREE** - only successful settlements incur the $0.01 fee.
+</Check>
 
-## Flat Rate Model
+---
 
-We charge a **fixed $0.001 per settlement**, not a percentage. Whether you settle $100 or $10,000, you pay the same predictable fee.
+## Fee Structure
+
+| Service | Cost | Notes |
+|---------|------|-------|
+| **Payment Verification** | FREE | Unlimited verifications |
+| **Settlement Execution** | **$0.01 USDC** | Per successful settlement |
+| **Failed Settlements** | $0 | No charge if settlement fails |
+
+### Example Pricing
+
+<CodeGroup>
+
+```typescript $0.001 Resource
+// Client pays: $0.011 USDC total
+// Merchant receives: $0.001 USDC
+// 0xmeta fee: $0.01 USDC
+
+{
+  "GET /weather": {
+    accepts: [{
+      price: "$0.011",  // Total: merchant price + fee
+    }]
+  }
+}
+```
+
+```typescript $0.10 Resource
+// Client pays: $0.11 USDC total
+// Merchant receives: $0.10 USDC
+// 0xmeta fee: $0.01 USDC
+
+{
+  "GET /premium-data": {
+    accepts: [{
+      price: "$0.11",  // Total: $0.10 + $0.01 fee
+    }]
+  }
+}
+```
+
+```typescript $1 Resource
+// Client pays: $1.01 USDC total
+// Merchant receives: $1.00 USDC
+// 0xmeta fee: $0.01 USDC
+
+{
+  "GET /analysis": {
+    accepts: [{
+      price: "$1.01",  // Total: $1.00 + $0.01 fee
+    }]
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## How Fee Collection Works
+
+### Treasury-First Architecture
+
+0xmeta collects fees **automatically** through treasury-first payment flow:
+
+```mermaid
+flowchart LR
+    Client[Client<br/>Pays $0.011] --> Treasury[0xmeta Treasury<br/>Receives $0.011]
+    Treasury --> |Keeps Fee<br/>$0.01| Fee[Fee Collected]
+    Treasury --> |Forwards<br/>$0.001| Merchant[Merchant<br/>Receives $0.001]
+    
+    style Treasury fill:#e1f5ff
+    style Fee fill:#fff3cd
+    style Merchant fill:#d4edda
+```
+
+**Flow:**
+1. Client authorizes payment to **0xmeta treasury** ($0.011 total)
+2. Treasury receives full amount
+3. Treasury **keeps fee** ($0.01 USDC)
+4. Treasury **forwards payment** to merchant ($0.001 USDC)
+
+<Info>
+**No merchant setup required!** Fee collection is automatic. Merchants receive payments with **zero gas costs**.
+</Info>
+
+---
+
+## Comparison: 0xmeta vs Traditional
+
+| Feature | 0xmeta | Stripe | PayPal | Crypto Direct |
+|---------|--------|--------|--------|---------------|
+| **Base Fee** | $0.01 flat | 2.9% + $0.30 | 3.49% + $0.49 | Gas fees |
+| **Setup** | None | KYC required | Business account | Wallet setup |
+| **Settlement Time** | 30-60 seconds | 2-7 days | 1-3 days | Minutes |
+| **Merchant Setup** | None | Complex | Moderate | Manual |
+| **Gas Costs** | $0 (paid by treasury) | N/A | N/A | ~$1-5 |
+
+### Cost Examples
+
+| Transaction | 0xmeta | Stripe | PayPal | Difference |
+|-------------|--------|--------|--------|-----------|
+| $0.10 | **$0.01** | $0.31 | $0.50 | 96.7% savings |
+| $1.00 | **$0.01** | $0.33 | $0.53 | 97.0% savings |
+| $10.00 | **$0.01** | $0.59 | $0.84 | 98.3% savings |
+| $100.00 | **$0.01** | $3.20 | $3.98 | 99.7% savings |
+
+<Check>
+**For micropayments (<$1), 0xmeta is 96-99% cheaper than traditional processors.**
+</Check>
+
+---
+
+## Pricing Details
+
+### What's Included
+
+✅ **Verification (FREE)**
+- EIP-3009 signature validation
+- Amount verification
+- Token verification
+- Address validation
+- Unlimited verifications
+
+✅ **Settlement ($0.01)**
+- On-chain settlement execution
+- Automatic fee collection
+- Merchant payment forwarding
+- Gas fees paid by treasury
+- Settlement status tracking
+
+### What You Pay
+
+<Steps>
+  <Step title="Set Your Price">
+    Decide how much you want to charge customers
+    
+    Example: $0.001 for weather data
+  </Step>
+  
+  <Step title="Add 0xmeta Fee">
+    Add $0.01 to your price
+    
+    Total: $0.001 + $0.01 = $0.011
+  </Step>
+  
+  <Step title="Configure Middleware">
+    ```typescript
+    {
+      "GET /weather": {
+        accepts: [{
+          price: "$0.011",  // Your price + fee
+        }]
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Receive Payment">
+    You receive your portion ($0.001)
+    
+    0xmeta keeps fee ($0.01)
+  </Step>
+</Steps>
+
+---
+
+## Fee Collection Process
+
+### Technical Flow
+
+```typescript
+// 1. Client Authorization
+const authorization = {
+  from: clientAddress,
+  to: treasuryAddress,      // 0xmeta treasury
+  value: "11000",           // $0.011 (1000 wei merchant + 10000 wei fee)
+  token: USDC_ADDRESS
+};
+
+// 2. Settlement Execution
+// Step 1: Client → Treasury
+await transferWithAuthorization({
+  from: clientAddress,
+  to: treasuryAddress,
+  value: 11000  // Full amount
+});
+// Treasury balance: +11000 wei ($0.011)
+
+// Step 2: Treasury → Merchant (automatic)
+await transfer({
+  from: treasuryAddress,
+  to: merchantAddress,
+  value: 1000  // Merchant portion
+});
+// Merchant balance: +1000 wei ($0.001)
+// Treasury balance: +10000 wei ($0.01) - fee kept
+```
+
+### Settlement Response
+
+```json
+{
+  "settlement_id": "stl_xyz",
+  "status": "settled",
+  "details": {
+    "client_payment": "11000",        // What client paid
+    "merchant_amount": "1000",        // What you received
+    "facilitator_fee": "10000",       // 0xmeta fee
+    "merchant_forward_tx": "0x...",   // Forwarding transaction
+    "merchant_forwarded": true        // ✅ Payment delivered
+  }
+}
+```
+
+---
+
+## Why This Pricing Model?
+
+### Flat Fee Advantages
+
+<AccordionGroup>
+  <Accordion title="Predictable Costs">
+    **Always $0.01 per settlement**, regardless of amount:
+    - $0.10 transaction → $0.01 fee (10%)
+    - $1.00 transaction → $0.01 fee (1%)
+    - $10.00 transaction → $0.01 fee (0.1%)
+    
+    Perfect for **micropayments** where percentage fees don't make sense.
+  </Accordion>
+
+  <Accordion title="No Hidden Fees">
+    **What you see is what you pay:**
+    - No monthly fees
+    - No setup fees
+    - No minimum volume
+    - No percentage fees
+    - No gas fees (paid by treasury)
+    - No withdrawal fees
+  </Accordion>
+
+  <Accordion title="Simple Math">
+    **Easy to calculate:**
+    ```
+    Client pays = Your price + $0.01
+    You receive = Your price
+    0xmeta receives = $0.01
+    ```
+    
+    No complex percentage calculations.
+  </Accordion>
+
+  <Accordion title="Microtransaction Optimized">
+    **Designed for small payments:**
+    
+    Traditional processors charge 2.9% + $0.30:
+    - $0.10 item → $0.30 fee (300% markup!)
+    - $1.00 item → $0.33 fee (33% markup)
+    
+    0xmeta charges $0.01:
+    - $0.10 item → $0.01 fee (10% markup)
+    - $1.00 item → $0.01 fee (1% markup)
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Merchant Economics
+
+### Calculate Your Net Revenue
+
+```typescript
+// Example: Weather API
+const yourPrice = 0.001;      // $0.001 per request
+const facilitatorFee = 0.01;  // $0.01 per settlement
+const clientPays = 0.011;     // $0.011 total
+
+// At 1000 requests/day:
+const dailyRevenue = yourPrice * 1000;         // $1.00
+const dailyFees = facilitatorFee * 1000;       // $10.00
+const netRevenue = dailyRevenue - dailyFees;   // -$9.00 ❌
+
+// You need ~10,000 req/day to be profitable with $0.001 pricing
+```
+
+<Warning>
+**Important:** For very low-priced resources (<$0.01), you need significant volume to be profitable. Consider bundling or higher pricing.
+</Warning>
+
+### Recommended Pricing Strategies
 
 <CardGroup cols={2}>
-  <Card title="Flat Fee" icon="coins">
-    **$0.001** per settlement *Same rate for all volumes*
+  <Card title="Micropayments" icon="coins">
+    **$0.01 - $0.10**
+    
+    Good for:
+    - API calls
+    - Data queries
+    - Simple computations
+    
+    Break-even: ~100-1000 requests
   </Card>
-  <Card title="Predictable Costs" icon="chart-line">
-    **Know exactly** what you'll pay *No tier calculations*
+  
+  <Card title="Standard Resources" icon="file">
+    **$0.10 - $1.00**
+    
+    Good for:
+    - Analysis reports
+    - Generated content
+    - Premium features
+    
+    Break-even: 10-100 requests
+  </Card>
+  
+  <Card title="Premium Content" icon="star">
+    **$1.00 - $10.00**
+    
+    Good for:
+    - Research reports
+    - AI-generated art
+    - Complex computations
+    
+    Fee impact: <1-10%
+  </Card>
+  
+  <Card title="High-Value Services" icon="gem">
+    **$10.00+**
+    
+    Good for:
+    - Enterprise features
+    - Bulk data access
+    - Subscription equivalents
+    
+    Fee impact: <0.1%
   </Card>
 </CardGroup>
 
+---
+
+## Volume Pricing
+
+### Custom Rates for High Volume
+
+If you process **10,000+ settlements per month**, contact us for custom pricing:
+
+**Email:** sales@0xmeta.ai
+
+**Volume tiers:**
+- 10K-100K settlements/month
+- 100K-1M settlements/month
+- 1M+ settlements/month
+
 <Info>
-  **Why flat rate?** Processing a settlement costs us the same whether it's $100
-  or $10,000. We charge based on our actual infrastructure costs, not
-  transaction value.
+We offer discounted rates for high-volume merchants. Minimum $0.001 per settlement for enterprise customers.
 </Info>
 
-## Simple Pricing
+---
 
-| Description               | Fee        | Notes                              |
-| ------------------------- | ---------- | ---------------------------------- |
-| **Payment Verification**  | **FREE**   | Unlimited verifications            |
-| **Settlement Processing** | **$0.001** | Flat fee per successful settlement |
+## Billing & Payments
 
-<Note>
-  One simple rate for all merchants. No tiers, no volume requirements.
-</Note>
+### How It Works
 
-## Payment Flow
+<Steps>
+  <Step title="No Invoices">
+    Fees are collected automatically during settlement. No invoices, no billing cycles.
+  </Step>
+  
+  <Step title="Real-Time Collection">
+    Fee is deducted from each settlement as it happens. No delayed billing.
+  </Step>
+  
+  <Step title="Transparent Tracking">
+    Settlement responses show exact fee amounts:
+    
+    ```json
+    {
+      "facilitator_fee": "10000",  // $0.01 in wei
+      "merchant_amount": "1000"    // What you received
+    }
+    ```
+  </Step>
+  
+  <Step title="No Credit Risk">
+    Since fees are collected upfront, there's no payment terms or credit risk.
+  </Step>
+</Steps>
 
-````mermaid
-sequenceDiagram
-    participant Customer
-    participant Merchant
-    participant 0xmeta
-    participant Blockchain
+---
 
-    Customer->>Blockchain: Send payment ($1,000 USDC)
-    Merchant->>0xmeta: POST /verify (FREE)
-    0xmeta->>Blockchain: Verify transaction
-    0xmeta-->>Merchant: Verification confirmed
+## Fee Transparency
 
-    Merchant->>0xmeta: POST /settle
-    0xmeta->>Merchant: Check USDC allowance
+### Settlement Breakdown
 
-    alt Allowance sufficient
-        0xmeta->>Blockchain: transferFrom($0.001 USDC)
-        Note over 0xmeta,Blockchain: Merchant pays flat fee
-        Blockchain-->>0xmeta: Fee collected
+Every settlement response includes complete fee breakdown:
 
-        0xmeta->>Blockchain: Execute settlement
-        Blockchain-->>Merchant: Receive $1,000 USDC
-        0xmeta-->>Merchant: Settlement complete
-    else Insufficient allowance
-        0xmeta-->>Merchant: Error: Approve USDC spending
-    end
+```json
+{
+  "settlement_id": "stl_abc123",
+  "status": "settled",
+  "client_payment": "11000",       // $0.011 USDC (6 decimals)
+  "merchant_amount": "1000",       // $0.001 USDC
+  "facilitator_fee": "10000",      // $0.01 USDC
+  "merchant_forward_tx": "0x...",
+  "fee_percentage": "90.9%",       // Of total payment
+  "merchant_percentage": "9.1%"    // Of total payment
+}
+```
 
-How It Works
-1. Verification (FREE)
+### On-Chain Verification
 
-curl -X POST https://facilitator.0xmeta.ai/v1/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_hash": "0x...",
-    "chain": "base",
-    "seller_address": "0x...",
-    "expected_amount": "1000000000",
-    "expected_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-  }'
+All transactions are verifiable on-chain:
 
-  Cost: $0.00 - Verification is always free!
+**Settlement Transaction:**
+```
+https://sepolia.basescan.org/tx/{settlement_tx_hash}
+```
 
-2. One-Time USDC Approval
-Before your first settlement, approve 0xmeta to collect fees:
-// Approve USDC spending (one-time setup)
-const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base
-const TREASURY = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb";
+**Merchant Forward:**
+```
+https://sepolia.basescan.org/tx/{merchant_forward_tx}
+```
 
-await usdcContract.approve(
-  TREASURY,
-  ethers.parseUnits("1000", 6) // Approve $1,000 worth of fees
-);
+---
 
-<Warning> **Important:** Merchants must approve USDC spending before settlements can be processed. This is a one-time setup step. </Warning>
+## FAQ
 
-3. Settlement (Flat Fee)
+<AccordionGroup>
+  <Accordion title="Why $0.01 instead of percentage?">
+    **Flat fees work better for micropayments:**
+    - 2.9% of $0.10 = $0.003 (too low to be sustainable)
+    - Plus fixed $0.30 = totally uneconomical
+    
+    $0.01 is the minimum viable fee for on-chain operations while keeping micropayments feasible.
+  </Accordion>
 
-curl -X POST https://facilitator.0xmeta.ai/v1/settle \
-  -H "Content-Type: application/json" \
-  -d '{
-    "verification_id": "vrf_abc123",
-    "destination_address": "0x...",
-    "amount": "1000000000"
-  }'
+  <Accordion title="Can I negotiate lower fees?">
+    **Yes, for high volume:**
+    - 10K+ settlements/month: Custom pricing available
+    - 100K+ settlements/month: Significant discounts
+    - Enterprise contracts: Contact sales@0xmeta.ai
+  </Accordion>
 
-  Cost: $0.001 flat fee per settlement
+  <Accordion title="Are there any hidden fees?">
+    **No:**
+    - No monthly fees
+    - No setup fees
+    - No gas fees (treasury pays)
+    - No withdrawal fees
+    - Just $0.01 per successful settlement
+  </Accordion>
 
-The settlement flow:
+  <Accordion title="What if settlement fails?">
+    **You pay $0.00:**
+    - Verification is always free
+    - Only successful settlements incur the $0.01 fee
+    - Failed settlements cost nothing
+  </Accordion>
 
-1.  We check your USDC allowance
+  <Accordion title="How do I track my fees?">
+    **Settlement responses include full breakdown:**
+    ```json
+    {
+      "facilitator_fee": "10000",
+      "merchant_amount": "1000"
+    }
+    ```
+    
+    You can also verify on-chain via block explorers.
+  </Accordion>
+</AccordionGroup>
 
-2.  We charge the flat fee via transferFrom
+---
 
-3.  We execute the settlement from customer to you
+## Next Steps
 
-4.  You receive the full customer payment amount
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started in 5 minutes
+  </Card>
+  
+  <Card title="Treasury-First Guide" icon="building-columns" href="/treasury-first">
+    Understand the architecture
+  </Card>
+  
+  <Card title="x402 Integration" icon="plug" href="/x402-integration">
+    Complete integration guide
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore endpoints
+  </Card>
+</CardGroup>
 
-Fee Collection Method
-Smart Contract Pay-Per-Settlement
-We use ERC-20 transferFrom to collect flat fees in USDC:
-
-<Steps> <Step title="Merchant Approves"> One-time approval of USDC spending to our treasury address. </Step> <Step title="Settlement Requested"> Merchant calls `/v1/settle` endpoint. </Step> <Step title="Fee Collected"> We execute `transferFrom` to collect the flat fee ($0.001). ```solidity USDC.transferFrom(merchant, treasury, 1000); // $0.001 in USDC (6 decimals) ``` </Step> <Step title="Settlement Executes"> Customer's payment is settled to merchant's address. </Step> </Steps>
-All in real-time, no batching or delayed billing.
-
-What's Included
-<AccordionGroup> <Accordion title="Payment Verification" icon="check-circle"> - Unlimited verification requests - Base network support (Mainnet + Sepolia) - Real-time transaction validation - **100% Free - No charges** </Accordion> <Accordion title="Settlement Processing" icon="arrow-right-arrow-left"> - Automated settlement execution - Smart contract fee collection - Background status polling - Webhook notifications - Retry logic & error handling - **$0.001 flat fee only on success** </Accordion> <Accordion title="Infrastructure" icon="server"> - 99.9% uptime SLA - Sub-2 second response times - Global CDN - DDoS protection - Gas fees covered - **All included in flat fee** </Accordion> <Accordion title="Support" icon="headset"> - Comprehensive documentation - Community Discord - Open-source examples - Email support - **Free for all users** </Accordion> </AccordionGroup>
-Why Flat Rate Works Better
-1. Your Costs Don't Scale With Transaction Value
-Processing a $100 settlement:
-- Infrastructure costs: Fixed
-- API operations: Fixed
-- Total: $0.001
-
-Processing a $10,000 settlement:
-- Infrastructure costs: Fixed
-- API operations: Fixed
-- Total: $0.001
-
-Same infrastructure cost = same fee. That's fair.
-
-2. Better for High-Value Transactions
-Example: $10,000 USDC settlement
-
-Model	Fee	You Receive	Effective %
-Traditional 2.9% + $0.30	$290.30	$9,709.70	2.903%
-Percentage 1%	$100.00	$9,900.00	1.000%
-0xmeta Flat $0.001	$0.001	$9,999.999	0.00001%
-You save $290.299 per transaction.
-
-3. Predictable Budgeting
-Traditional percentage model:
-Month 1: $100K revenue → $2,900 fees
-Month 2: $500K revenue → $14,500 fees ⬆️ 400%
-Month 3: $1M revenue → $29,000 fees ⬆️ 900%
-
-0xmeta flat rate model:
-Month 1: 1,000 settlements → $1.00 fees
-Month 2: 1,000 settlements → $1.00 fees ➡️ Same
-Month 3: 1,000 settlements → $1.00 fees ➡️ Same
-
-Your costs stay consistent as your business grows.
-
-No Hidden Fees
-<Check>✅ No signup required</Check>
-<Check>✅ No monthly minimums</Check>
-<Check>✅ No setup fees</Check>
-<Check>✅ No API key costs</Check>
-<Check>✅ No account maintenance</Check>
-<Check>✅ No gas fee markups</Check>
-<Check>✅ No revenue sharing</Check>
-<Check>✅ No early termination fees</Check>
-
-Only charge: $0.001 flat fee per successful settlement.
-
-Smart Contracts
-Our fee collection is fully on-chain and transparent:
-
-Base Mainnet
-USDC Contract: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-
-Treasury Address: 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
-
-Base Sepolia (Testnet)
-USDC Contract: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
-
-Treasury Address: 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
-
-<CardGroup cols={2}> <Card title="View on BaseScan" icon="link" href="https://basescan.org/address/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"> Verify our treasury address </Card> <Card title="Open Source" icon="code" href="https://github.com/0xmeta/facilitator"> Review the code </Card> </CardGroup>
-Frequently Asked Questions
-<AccordionGroup> <Accordion title="What if my transaction is smaller than the fee?"> Our flat fee is designed to be negligible even for small transactions:
-- $0.001 fee is suitable for transactions $1+
-- Most crypto transactions are well above this minimum
-
-Contact us if you need to process micro-transactions below $1.
-
-</Accordion> <Accordion title="When is the flat fee charged?"> **Before settlement execution:**
-
-1. You call `/v1/settle`
-2. We check your USDC allowance
-3. We collect the flat fee via `transferFrom`
-4. We execute the settlement
-
-If fee collection fails, settlement doesn't proceed.
-
-</Accordion> <Accordion title="Can I get a refund if settlement fails?"> Yes! If settlement fails after we've collected the fee, we automatically refund it within 24 hours.
-
-Track refund status: `GET /v1/settlements/{settlement_id}`
-
-</Accordion> <Accordion title="Why flat rate instead of percentage?"> **Our costs are fixed per settlement:**
-
-- API operations cost the same regardless of amount
-- Database writes cost the same
-- Smart contract gas costs the same
-
-Percentage fees make sense for credit cards (fraud, chargebacks). Crypto doesn't have these issues.
-
-````
-
-Example (1,000 settlements/month):
-1,000 × $0.001 = $1.00 per month
-
-Recommended approval: $5-$10
-(enough for 5-10 months of fees)
-
-````
-
-</Accordion> <Accordion title="Are there any other fees?"> **No other fees whatsoever:**
-
-- ✅ Verification: FREE
-- ✅ Status checks: FREE
-- ✅ Webhooks: FREE
-- ✅ API usage: FREE
-- ✅ Gas fees: Included
-
-**Only charge:** $0.001 flat fee per successful settlement.
-
-</Accordion> </AccordionGroup>
-
-All settlements: $0.001 flat fee
-
-Need Help?
-<CardGroup cols={2}> <Card title="Documentation" icon="book" href="/api-reference/introduction"> Complete API reference </Card> <Card title="Discord Community" icon="discord" href="https://discord.gg/0xmeta"> Get community support </Card> <Card title="GitHub" icon="code" href="https://github.com/0xmeta/facilitator"> View source code </Card> <Card title="Contact Support" icon="envelope" href="mailto:support@0xmeta.ai"> Get help with integration </Card> </CardGroup> ```
-````
+<Check>
+**Simple, transparent, automatic** - $0.01 per settlement, collected during payment flow. No setup required.
+</Check>

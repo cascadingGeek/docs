@@ -16,7 +16,7 @@
   "topbarLinks": [
     {
       "name": "API Status",
-      "url": "https://0xmeta.ai"
+      "url": "https://status.0xmeta.ai"
     }
   ],
   "topbarCtaButton": {
@@ -47,57 +47,79 @@
       "name": "x402 Ecosystem",
       "icon": "link",
       "url": "https://www.x402.org/ecosystem"
+    },
+    {
+      "name": "Live Demo",
+      "icon": "play",
+      "url": "https://0xemta-news-aggregator.netlify.app"
     }
   ],
   "navigation": {
     "groups": [
       {
         "group": "Get Started",
-        "pages": ["quickstart", "pricing"]
+        "pages": [
+          "x402-integration",
+          "architecture",
+          "pricing"
+        ]
       },
+      {
+        "group": "Micro Protocols",
+        "pages": [
+          "microprotocols"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/getting-started",
+          "guides/multi-chain"
+        ]
+      },
+      {
+        "group": "Advanced",
+        "pages": [
+          "advanced/background-workers"
+        ]
+      },
+      {
+        "group": "Support",
+        "pages": [
+          "faq"
+        ]
+      }
+    ],
+    "api-reference": [
       {
         "group": "API Documentation",
         "pages": [
           "api-reference/introduction",
           "api-reference/verify",
           "api-reference/settle",
-          "api-reference/webhooks",
           "api-reference/errors"
         ]
-      },
-      {
-        "group": "Micro Protocols",
-        "pages": ["microprotocols"]
-      },
-      {
-        "group": "Guides",
-        "pages": ["guides/multi-chain"]
-      },
+      }
+    ],
+    "integration": [
       {
         "group": "Integration Examples",
-        "pages": ["integration/nodejs", "integration/python"]
-      },
-      {
-        "group": "Advanced",
-        "pages": ["advanced/background-workers"]
-      },
-      {
-        "group": "Support",
-        "pages": ["faq"]
+        "pages": [
+          "integration/nodejs"
+        ]
       }
     ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/0xmeta_ai",
-      "github": "https://github.com/0xmetaHQ"
+    "x": "https://x.com/0xmeta_ai",
+    "github": "https://github.com/0xmetaHQ"
     }
   },
   "api": {
-    "baseUrl": "https://facilitator.api.0xmeta.ai",
+    "baseUrl": "https://facilitator.0xmeta.ai",
     "auth": {
-      "method": "key",
-      "name": "X-API-Key"
+      "method": "none"
     },
     "playground": {
       "mode": "simple"

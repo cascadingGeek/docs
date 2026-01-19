@@ -1,520 +1,704 @@
 ---
 title: "Node.js Integration"
-description: "Complete guide to integrating 0xmeta.ai with Node.js"
+description: "Complete guide to integrating 0xmeta with Node.js using x402/express"
 ---
 
-## Installation
+## Overview
 
-Install the required dependencies:
-
-```bash npm
-npm install axios
-# or
-npm install node-fetch
-```
+0xmeta facilitator supports both **x402 v1** (legacy) and **x402 v2** (current) protocols. This guide shows you how to integrate using the x402 express middleware.
 
 <Note>
-  This guide uses the native `fetch` API available in Node.js 18+. For older
-  versions, use `node-fetch` or `axios`.
+**Recommended:** Use x402 v2 for new projects. It provides better network identification with CAIP-2 format.
 </Note>
 
-## Setup
+---
 
-Create a new file `0xmeta.js` to encapsulate the API client:
+## Quick Start
 
-```javascript
-const API_BASE_URL = 'https://facilitator.0xmeta.ai/v1';
-const API_KEY = process.env.0XMETA_API_KEY;
+### Installation
 
-class ZeroXMetaClient {
-  constructor(apiKey) {
-    this.apiKey = apiKey;
-    this.baseUrl = API_BASE_URL;
-  }
+<CodeGroup>
 
-  async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-API-Key': this.apiKey,
-      ...options.headers,
-    };
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || `HTTP ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  async verifyPayment(params) {
-    const idempotencyKey = params.idempotencyKey || `verify_${Date.now()}`;
-
-    return this.request('/verify', {
-      method: 'POST',
-      headers: {
-        'Idempotency-Key': idempotencyKey,
-      },
-      body: JSON.stringify({
-        transaction_hash: params.transactionHash,
-        chain: params.chain,
-        seller_address: params.sellerAddress,
-        expected_amount: params.expectedAmount,
-        expected_token: params.expectedToken || null,
-        metadata: params.metadata,
-        webhook_url: params.webhookUrl,
-      }),
-    });
-  }
-
-  async settlePayment(params) {
-    const idempotencyKey = params.idempotencyKey || `settle_${Date.now()}`;
-
-    return this.request('/settle', {
-      method: 'POST',
-      headers: {
-        'Idempotency-Key': idempotencyKey,
-      },
-      body: JSON.stringify({
-        verification_id: params.verificationId,
-        destination_address: params.destinationAddress,
-        amount: params.amount || null,
-        metadata: params.metadata,
-      }),
-    });
-  }
-
-  async getVerificationStatus(verificationId) {
-    return this.request(`/verifications/${verificationId}`);
-  }
-
-  async getSettlementStatus(settlementId) {
-    return this.request(`/settlements/${settlementId}`);
-  }
-}
-
-module.exports = ZeroXMetaClient;
+```bash x402 v2 (Recommended)
+npm install @x402/express @x402/evm @x402/core express dotenv
 ```
 
-## Basic Usage
-
-### Verify a Payment
-
-```javascript
-const ZeroXMetaClient = require('./0xmeta');
-
-const client = new ZeroXMetaClient(process.env.0XMETA_API_KEY);
-
-async function verifyPayment() {
-  try {
-    const result = await client.verifyPayment({
-      transactionHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-      chain: 'base',
-      sellerAddress: '0x742d35cc6634c0532925a3b844bc9e7595f0beb0',
-      expectedAmount: '1000000000000000000', // 1 ETH in wei
-      expectedToken: null, // null for native token
-      metadata: {
-        order_id: 'ORDER-123',
-        customer_id: 'CUST-456',
-      },
-      webhookUrl: 'https://your-app.com/webhooks/settlement',
-      idempotencyKey: 'verify_ORDER-123_1234567890',
-    });
-
-    console.log('Verification ID:', result.verification_id);
-    console.log('Status:', result.status);
-
-    return result;
-  } catch (error) {
-    console.error('Verification failed:', error.message);
-    throw error;
-  }
-}
-
-verifyPayment();
+```bash x402 v1 (Legacy)
+npm install x402-express express dotenv
 ```
 
-### Settle a Payment
+</CodeGroup>
 
-```javascript
-async function settlePayment(verificationId) {
-  try {
-    const result = await client.settlePayment({
-      verificationId: verificationId,
-      destinationAddress: "0x742d35cc6634c0532925a3b844bc9e7595f0beb0",
-      amount: null, // null to settle full amount
-      metadata: {
-        payout_id: "PAYOUT-789",
+---
+
+## x402 v2 Integration (Recommended)
+
+### Complete Server Example
+
+<CodeGroup>
+
+```typescript server.ts
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+
+config();
+
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
+
+if (!evmAddress) {
+  console.error("Missing required environment variables");
+  process.exit(1);
+}
+
+const facilitatorUrl = process.env.FACILITATOR_URL;
+if (!facilitatorUrl) {
+  console.error("❌ FACILITATOR_URL environment variable is required");
+  process.exit(1);
+}
+
+const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+const app = express();
+
+app.use(
+  paymentMiddleware(
+    {
+      "GET /weather": {
+        accepts: [
+          {
+            scheme: "exact",
+            price: "$0.011",              // Your price + $0.01 fee
+            network: "eip155:84532",      // Base Sepolia (CAIP-2 format)
+            payTo: evmAddress,            // Treasury address from /supported
+          },
+        ],
+        description: "Weather data",
+        mimeType: "application/json",
       },
-      idempotencyKey: `settle_${verificationId}_${Date.now()}`,
-    });
+    },
+    new x402ResourceServer(facilitatorClient)
+      .register("eip155:84532", new ExactEvmScheme()),
+  ),
+);
 
-    console.log("Settlement ID:", result.settlement_id);
-    console.log("Status:", result.status);
+app.get("/weather", (req, res) => {
+  res.send({
+    report: {
+      weather: "sunny",
+      temperature: 70,
+    },
+  });
+});
 
-    return result;
-  } catch (error) {
-    console.error("Settlement failed:", error.message);
-    throw error;
+app.listen(4021, () => {
+  console.log(`Server listening at http://localhost:4021`);
+});
+```
+
+```env .env
+# ✅ CRITICAL: Use treasury address, NOT your merchant address
+# Get from: curl https://facilitator.0xmeta.ai/v1/supported
+EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+
+# Your merchant address (for reference)
+MERCHANT_ADDRESS=0xa821f428ef8cc9f54a9915336a82220853059090
+
+# Facilitator endpoint
+FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+```
+
+```json package.json
+{
+  "name": "x402-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "dev": "tsx watch server.ts"
+  },
+  "dependencies": {
+    "@x402/express": "latest",
+    "@x402/evm": "latest",
+    "@x402/core": "latest",
+    "express": "^4.18.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "@types/express": "latest",
+    "@types/node": "latest"
   }
 }
 ```
 
-## Express.js Integration
+</CodeGroup>
 
-### Complete Express Route Example
+### Running the Server
 
-```javascript
-const express = require('express');
-const ZeroXMetaClient = require('./0xmeta');
+```bash
+# Install dependencies
+npm install
+
+# Start server
+npm start
+```
+
+**Expected output:**
+```
+Server listening at http://localhost:4021
+```
+
+---
+
+## x402 v1 Integration (Legacy)
+
+### Complete Server Example
+
+<CodeGroup>
+
+```typescript server-v1.ts
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware, Resource, type SolanaAddress } from "x402-express";
+
+config(); 
+
+const facilitatorUrl = process.env.FACILITATOR_URL as Resource;
+const payTo = process.env.EVM_ADDRESS as `0x${string}` | SolanaAddress;
+
+if (!facilitatorUrl || !payTo) {
+  console.error("Missing required environment variables");
+  process.exit(1);
+}
 
 const app = express();
-app.use(express.json());
 
-const client = new ZeroXMetaClient(process.env.0XMETA_API_KEY);
+app.use(
+  paymentMiddleware(
+    payTo,  // Treasury address (first parameter in v1)
+    {
+      "GET /weather": {
+        price: "$0.011",            // USDC amount in dollars
+        network: "base-sepolia",     // Network name (v1 format)
+      },
+      "/premium/*": {
+        // Can also define atomic amounts
+        price: {
+          amount: "100000",
+          asset: {
+            address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            decimals: 6,
+            eip712: {
+              name: "USDC",
+              version: "2",
+            },
+          },
+        },
+        network: "base-sepolia",
+      },
+    },
+    {
+      url: facilitatorUrl,
+    },
+  ),
+);
 
-// Verify payment endpoint
-app.post('/api/payments/verify', async (req, res) => {
-  try {
-    const {
-      transaction_hash,
-      chain,
-      seller_address,
-      expected_amount,
-      expected_token,
-      order_id,
-    } = req.body;
-
-    const verification = await client.verifyPayment({
-      transactionHash: transaction_hash,
-      chain,
-      sellerAddress: seller_address,
-      expectedAmount: expected_amount,
-      expectedToken: expected_token || null,
-      metadata: { order_id },
-      webhookUrl: `${req.protocol}://${req.get('host')}/webhooks/settlement`,
-      idempotencyKey: `verify_${order_id}_${Date.now()}`,
-    });
-
-    res.json({
-      success: true,
-      verification_id: verification.verification_id,
-      status: verification.status,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+app.get("/weather", (req, res) => {
+  res.send({
+    report: {
+      weather: "sunny",
+      temperature: 70,
+    },
+  });
 });
 
-// Settle payment endpoint
-app.post('/api/payments/settle', async (req, res) => {
-  try {
-    const { verification_id, destination_address } = req.body;
-
-    const settlement = await client.settlePayment({
-      verificationId: verification_id,
-      destinationAddress: destination_address,
-      idempotencyKey: `settle_${verification_id}_${Date.now()}`,
-    });
-
-    res.json({
-      success: true,
-      settlement_id: settlement.settlement_id,
-      status: settlement.status,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+app.get("/premium/content", (req, res) => {
+  res.send({
+    content: "This is premium content",
+  });
 });
 
-// Webhook handler
-app.post('/webhooks/settlement', express.raw({ type: 'application/json' }), async (req, res) => {
-  try {
-    const signature = req.headers['x-signature'];
-    // Verify webhook signature here (see webhooks guide)
-
-    const payload = JSON.parse(req.body);
-
-    if (payload.type === 'settlement.completed') {
-      const { settlement_id, verification_id, status } = payload.data;
-
-      // Update your database
-      await updateSettlementStatus(settlement_id, status);
-
-      console.log(`Settlement ${settlement_id} completed`);
-    }
-
-    res.status(200).json({ received: true });
-  } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(400).json({ error: error.message });
-  }
-});
-
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
+app.listen(4021, () => {
+  console.log(`Server listening at http://localhost:4021`);
 });
 ```
+
+```env .env
+# Same configuration as v2
+EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+MERCHANT_ADDRESS=0xa821f428ef8cc9f54a9915336a82220853059090
+FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+```
+
+```json package.json
+{
+  "name": "x402-server-v1",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts"
+  },
+  "dependencies": {
+    "x402-express": "latest",
+    "express": "^4.18.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "@types/express": "latest"
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Understanding Treasury Address
+
+### Why Treasury Address?
+
+<Warning>
+**Critical:** You must use 0xmeta's treasury address in `payTo`, NOT your merchant address.
+</Warning>
+
+**Technical reason:** EIP-3009 signatures are cryptographically bound to a specific recipient. To collect fees atomically, clients must authorize payments to the treasury, which then forwards to your address.
+
+### Getting Treasury Address
+
+**Option 1: From /supported endpoint**
+
+```bash
+curl https://facilitator.0xmeta.ai/v1/supported
+```
+
+Response:
+```json
+{
+  "kinds": [...],
+  "signers": {
+    "eip155:*": ["0x5d791e3554d0e83f171126905bda1640bf6f9a8b"]
+  }
+}
+```
+
+✅ Use `signers["eip155:*"][0]` as your `EVM_ADDRESS`
+
+**Option 2: Hardcode (not recommended)**
+
+```typescript
+const TREASURY_ADDRESS = "0x5d791e3554d0e83f171126905bda1640bf6f9a8b";
+```
+
+<Tip>
+Query `/supported` programmatically on server startup for dynamic treasury discovery.
+</Tip>
+
+---
+
+## Multiple Resources
+
+### Protecting Multiple Endpoints
+
+<CodeGroup>
+
+```typescript v2 - Multiple Routes
+app.use(
+  paymentMiddleware(
+    {
+      "GET /weather": {
+        accepts: [{
+          scheme: "exact",
+          price: "$0.011",
+          network: "eip155:84532",
+          payTo: evmAddress,
+        }],
+        description: "Current weather",
+      },
+      
+      "GET /forecast": {
+        accepts: [{
+          scheme: "exact",
+          price: "$0.021",              // Different price
+          network: "eip155:84532",
+          payTo: evmAddress,
+        }],
+        description: "7-day forecast",
+      },
+      
+      "POST /analysis": {
+        accepts: [{
+          scheme: "exact",
+          price: "$0.101",              // Higher price
+          network: "eip155:84532",
+          payTo: evmAddress,
+        }],
+        description: "Weather analysis",
+      },
+    },
+    new x402ResourceServer(facilitatorClient)
+      .register("eip155:84532", new ExactEvmScheme()),
+  ),
+);
+```
+
+```typescript v1 - Multiple Routes
+app.use(
+  paymentMiddleware(
+    payTo,
+    {
+      "GET /weather": {
+        price: "$0.011",
+        network: "base-sepolia",
+      },
+      "GET /forecast": {
+        price: "$0.021",
+        network: "base-sepolia",
+      },
+      "/premium/*": {
+        price: "$0.101",
+        network: "base-sepolia",
+      },
+    },
+    { url: facilitatorUrl },
+  ),
+);
+```
+
+</CodeGroup>
+
+---
+
+## Network Configuration
+
+### Supported Networks
+
+| x402 v1 | x402 v2 | Chain ID | Network |
+|---------|---------|----------|---------|
+| `"base-sepolia"` | `"eip155:84532"` | 84532 | Base Sepolia (Testnet) |
+| `"base"` | `"eip155:8453"` | 8453 | Base Mainnet |
+
+### Production vs Development
+
+<CodeGroup>
+
+```typescript Development (Base Sepolia)
+// v2
+network: "eip155:84532"
+
+// v1
+network: "base-sepolia"
+```
+
+```typescript Production (Base Mainnet)
+// v2
+network: "eip155:8453"
+
+// v1
+network: "base"
+```
+
+</CodeGroup>
+
+---
+
+## Testing Your Integration
+
+### Test with x402 Client
+
+<CodeGroup>
+
+```typescript client.ts
+import { config } from "dotenv";
+import { x402Client, wrapAxiosWithPayment } from "@x402/axios";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { privateKeyToAccount } from "viem/accounts";
+import axios from "axios";
+
+config();
+
+const evmPrivateKey = process.env.EVM_PRIVATE_KEY as `0x${string}`;
+const baseURL = "http://localhost:4021";
+const url = `${baseURL}/weather`;
+
+async function main(): Promise<void> {
+  const evmSigner = privateKeyToAccount(evmPrivateKey);
+
+  const client = new x402Client();
+  registerExactEvmScheme(client, { signer: evmSigner });
+
+  const api = wrapAxiosWithPayment(axios.create(), client);
+
+  console.log(`Making request to: ${url}\n`);
+  const response = await api.get(url);
+  
+  console.log("Response:", response.data);
+}
+
+main().catch(console.error);
+```
+
+```bash Run Test
+npm run test:client
+```
+
+</CodeGroup>
+
+### Expected Flow
+
+```
+1. ✅ Client requests /weather
+2. ✅ Server returns 402 with treasury address
+3. ✅ Client creates EIP-3009 authorization to treasury
+4. ✅ Client sends authorization to server
+5. ✅ Server forwards to facilitator for verification
+6. ✅ Facilitator verifies signature
+7. ✅ Facilitator settles payment
+   a. Client → Treasury ($0.011)
+   b. Treasury → Merchant ($0.001, automatic)
+8. ✅ Server returns 200 + weather data
+```
+
+---
 
 ## Error Handling
 
-```javascript
-class ZeroXMetaError extends Error {
-  constructor(message, code, details) {
-    super(message);
-    this.name = 'ZeroXMetaError';
-    this.code = code;
-    this.details = details;
-  }
-}
+### Common Issues
 
-// Enhanced request method with error handling
-async request(endpoint, options = {}) {
-  try {
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': this.apiKey,
-        ...options.headers,
-      },
-    });
+<AccordionGroup>
+  <Accordion title="Error: Payment must be to treasury, not merchant">
+    **Cause:** Server is configured with merchant address
+    
+    **Solution:**
+    ```bash
+    # Get treasury address
+    curl https://facilitator.0xmeta.ai/v1/supported
+    
+    # Update .env
+    EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b  # Treasury
+    ```
+  </Accordion>
 
-    const data = await response.json();
+  <Accordion title="Error: Invalid network">
+    **Cause:** Network format mismatch
+    
+    **Solution:**
+    - v2: Use CAIP-2 format (`eip155:84532`)
+    - v1: Use string format (`base-sepolia`)
+  </Accordion>
 
-    if (!response.ok) {
-      throw new ZeroXMetaError(
-        data.error?.message || `HTTP ${response.status}`,
-        data.error?.code || 'unknown_error',
-        data.error?.details
-      );
-    }
+  <Accordion title="Error: FACILITATOR_URL not set">
+    **Cause:** Missing environment variable
+    
+    **Solution:**
+    ```env
+    FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+    ```
+  </Accordion>
 
-    return data;
-  } catch (error) {
-    if (error instanceof ZeroXMetaError) {
-      throw error;
-    }
-    throw new ZeroXMetaError(
-      error.message,
-      'network_error',
-      { originalError: error.message }
-    );
-  }
-}
+  <Accordion title="Settlement fails: authorization expired">
+    **Cause:** Client's `validBefore` too short
+    
+    **Solution:** Client should set longer validity:
+    ```javascript
+    validBefore: String(Math.floor(Date.now() / 1000) + 86400)  // 24 hours
+    ```
+  </Accordion>
+</AccordionGroup>
 
-// Usage with error handling
-try {
-  const result = await client.verifyPayment({...});
-} catch (error) {
-  if (error instanceof ZeroXMetaError) {
-    switch (error.code) {
-      case 'verification_failed':
-        console.error('Payment verification failed:', error.details);
-        break;
-      case 'invalid_request':
-        console.error('Invalid request:', error.details);
-        break;
-      default:
-        console.error('API error:', error.message);
-    }
-  } else {
-    console.error('Unexpected error:', error);
-  }
-}
-```
+---
 
-## Polling for Status
+## Advanced Configuration
 
-```javascript
-async function waitForSettlement(settlementId, maxAttempts = 60) {
-  const initialDelay = 5000; // 5 seconds
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const settlement = await client.getSettlementStatus(settlementId);
-
-    if (settlement.status === 'settled' || settlement.status === 'failed') {
-      return settlement;
-    }
-
-    // Exponential backoff
-    const delay = initialDelay * Math.pow(2, Math.min(attempt, 5));
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
-
-  throw new Error('Settlement timeout');
-}
-
-// Usage
-const settlement = await client.settlePayment({...});
-const completed = await waitForSettlement(settlement.settlement_id);
-console.log('Settlement completed:', completed);
-```
-
-## TypeScript Support
+### Dynamic Pricing
 
 ```typescript
-interface VerifyPaymentParams {
-  transactionHash: string;
-  chain: "base" | "base-sepolia";
-  sellerAddress: string;
-  expectedAmount: string;
-  expectedToken?: string | null;
-  metadata?: Record<string, any>;
-  webhookUrl?: string;
-  idempotencyKey?: string;
-}
-
-interface VerifyPaymentResponse {
-  verification_id: string;
-  status: "verified" | "pending" | "failed" | "rejected";
-  transaction_hash: string;
-  chain: string;
-  verified_amount: string | null;
-  verified_token: string | null;
-  verified_at: string | null;
-  details: {
-    confirmations?: number;
-    block_number?: number;
-    gas_used?: string;
+// Calculate price based on resource complexity
+function calculatePrice(resource: string): string {
+  const baseFee = 0.01;  // Facilitator fee
+  
+  const prices: Record<string, number> = {
+    "/weather": 0.001,
+    "/forecast": 0.01,
+    "/analysis": 0.10,
   };
+  
+  const resourcePrice = prices[resource] || 0.001;
+  const total = resourcePrice + baseFee;
+  
+  return `$${total.toFixed(3)}`;
 }
 
-interface SettlePaymentParams {
-  verificationId: string;
-  destinationAddress: string;
-  amount?: string | null;
-  metadata?: Record<string, any>;
-  idempotencyKey?: string;
-}
-
-interface SettlePaymentResponse {
-  settlement_id: string;
-  verification_id: string;
-  status: "pending" | "settled" | "failed" | "rejected";
-  settlement_tx_hash: string | null;
-  settled_amount: string | null;
-  settled_at: string | null;
-  details: {
-    estimated_time?: number;
-    fee?: string;
-    gas_used?: string;
-  };
-}
-
-class ZeroXMetaClient {
-  constructor(private apiKey: string) {}
-
-  async verifyPayment(
-    params: VerifyPaymentParams
-  ): Promise<VerifyPaymentResponse> {
-    // Implementation...
-  }
-
-  async settlePayment(
-    params: SettlePaymentParams
-  ): Promise<SettlePaymentResponse> {
-    // Implementation...
-  }
-}
+app.use(
+  paymentMiddleware(
+    {
+      "GET /weather": {
+        accepts: [{
+          price: calculatePrice("/weather"),  // $0.011
+          network: "eip155:84532",
+          payTo: evmAddress,
+        }]
+      },
+    },
+    facilitatorClient
+  ),
+);
 ```
+
+### Custom Middleware
+
+```typescript
+// Add logging or analytics
+import { NextFunction, Request, Response } from "express";
+
+function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
+  console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
+  
+  res.on("finish", () => {
+    console.log(`Response: ${res.statusCode}`);
+  });
+  
+  next();
+}
+
+app.use(loggingMiddleware);
+app.use(paymentMiddleware(...));
+```
+
+---
 
 ## Best Practices
 
 <AccordionGroup>
   <Accordion title="Use Environment Variables">
-    ```javascript
-    // .env
-    0XMETA_API_KEY=your_api_key_here
+    ```typescript
+    // ✅ Good
+    const evmAddress = process.env.EVM_ADDRESS;
     
-    // In your code
-    require('dotenv').config();
-    const client = new ZeroXMetaClient(process.env.0XMETA_API_KEY);
+    // ❌ Bad
+    const evmAddress = "0x5d791e3554d0e83f171126905bda1640bf6f9a8b";
     ```
   </Accordion>
 
-  <Accordion title="Implement Idempotency">
-    ```javascript
-    // Store idempotency keys in your database
-    const idempotencyKey = `verify_${orderId}_${timestamp}`;
-    
-    // Check if already processed
-    const existing = await db.findVerification(idempotencyKey);
-    if (existing) {
-      return existing;
+  <Accordion title="Validate Configuration">
+    ```typescript
+    if (!evmAddress || !facilitatorUrl) {
+      console.error("Missing required configuration");
+      process.exit(1);
     }
-    
-    const result = await client.verifyPayment({
-      ...params,
-      idempotencyKey,
-    });
-    
-    await db.saveVerification(idempotencyKey, result);
     ```
   </Accordion>
 
-  <Accordion title="Handle Webhooks Securely">
-    ```javascript
-    const crypto = require('crypto');
-    
-    function verifyWebhookSignature(payload, signature, secret) {
-      const hmac = crypto.createHmac('sha256', secret);
-      const digest = hmac.update(payload).digest('hex');
-      return crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(digest)
-      );
+  <Accordion title="Query /supported on Startup">
+    ```typescript
+    async function getTreasuryAddress(): Promise<string> {
+      const response = await fetch(`${facilitatorUrl}/supported`);
+      const data = await response.json();
+      return data.signers["eip155:*"][0];
     }
     
-    app.post('/webhooks/settlement', (req, res) => {
-      const signature = req.headers['x-signature'];
-      const isValid = verifyWebhookSignature(req.body, signature, WEBHOOK_SECRET);
-      
-      if (!isValid) {
-        return res.status(401).json({ error: 'Invalid signature' });
-      }
-      // Process webhook...
-    });
+    const treasuryAddress = await getTreasuryAddress();
     ```
   </Accordion>
 
-  <Accordion title="Use Async/Await with Try-Catch">
-    ```javascript
-    // Good
-    try {
-      const result = await client.verifyPayment(params);
-      // Handle success
-    } catch (error) {
-      // Handle error
-    }
-    
-    // Avoid
-    client.verifyPayment(params)
-      .then(result => { /* ... */ })
-      .catch(error => { /* ... */ });
+  <Accordion title="Use TypeScript">
+    ```typescript
+    // Type safety prevents configuration errors
+    const evmAddress: `0x${string}` = process.env.EVM_ADDRESS as `0x${string}`;
     ```
   </Accordion>
 </AccordionGroup>
 
-<Info>
-  For production applications, consider using a library like `axios` with retry
-  logic and request interceptors for better error handling.
-</Info>
+---
 
-<Tip>
-  Always use webhooks instead of polling for settlement status updates. It's
-  more efficient and provides instant notifications.
-</Tip>
+## Migration: v1 → v2
+
+### Step-by-Step
+
+<Steps>
+  <Step title="Update Dependencies">
+    ```bash
+    npm uninstall x402-express
+    npm install @x402/express @x402/evm @x402/core
+    ```
+  </Step>
+  
+  <Step title="Update Imports">
+    ```typescript
+    // Before (v1)
+    import { paymentMiddleware } from "x402-express";
+    
+    // After (v2)
+    import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+    import { ExactEvmScheme } from "@x402/evm/exact/server";
+    import { HTTPFacilitatorClient } from "@x402/core/server";
+    ```
+  </Step>
+  
+  <Step title="Update Middleware Config">
+    ```typescript
+    // Before (v1)
+    app.use(
+      paymentMiddleware(
+        payTo,
+        { "GET /weather": { price: "$0.011", network: "base-sepolia" } },
+        { url: facilitatorUrl }
+      )
+    );
+    
+    // After (v2)
+    const client = new HTTPFacilitatorClient({ url: facilitatorUrl });
+    
+    app.use(
+      paymentMiddleware(
+        {
+          "GET /weather": {
+            accepts: [{
+              scheme: "exact",
+              price: "$0.011",
+              network: "eip155:84532",
+              payTo: evmAddress,
+            }]
+          }
+        },
+        new x402ResourceServer(client).register("eip155:84532", new ExactEvmScheme())
+      )
+    );
+    ```
+  </Step>
+  
+  <Step title="Update Network Identifiers">
+    | v1 | v2 |
+    |----|-----|
+    | `"base-sepolia"` | `"eip155:84532"` |
+    | `"base"` | `"eip155:8453"` |
+  </Step>
+</Steps>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Treasury-First Architecture" icon="building-columns" href="/treasury-first">
+    Understand payment flow
+  </Card>
+  
+  <Card title="x402 Integration Guide" icon="book" href="/x402-integration">
+    Complete reference
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore all endpoints
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/api-reference/errors">
+    Handle errors properly
+  </Card>
+</CardGroup>
+
+<Check>
+**You're ready!** Your server is now accepting x402 payments with treasury-first architecture.
+</Check>

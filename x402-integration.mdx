@@ -1,0 +1,687 @@
+---
+title: "x402 Integration Guide"
+description: "Complete guide for integrating x402 v1 and v2 with 0xmeta facilitator"
+---
+
+## Overview
+
+0xmeta supports both **x402 v1** (legacy) and **x402 v2** (current) protocols. This guide shows you how to integrate with either version.
+
+<Note>
+**Recommended:** Use x402 v2 for new projects. It provides better network identification with CAIP-2 format and improved extensibility.
+</Note>
+
+---
+
+## Key Differences: v1 vs v2
+
+| Feature | x402 v1 | x402 v2 |
+|---------|---------|---------|
+| **Network Format** | `"base-sepolia"` | `"eip155:84532"` (CAIP-2) |
+| **SDK Package** | `x402-express` | `@x402/express` |
+| **Status** | Legacy (supported) | Current (recommended) |
+| **Configuration** | Simple string network | Structured CAIP-2 network |
+
+Both versions work with 0xmeta facilitator!
+
+---
+
+## x402 v2 Integration (Recommended)
+
+### Installation
+
+```bash
+npm install @x402/express @x402/evm @x402/core
+```
+
+### Complete Server Setup
+
+<CodeGroup>
+
+```typescript server.ts
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+
+config();
+
+// ✅ Get treasury address from facilitator's /supported endpoint
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
+
+if (!evmAddress) {
+  console.error("Missing EVM_ADDRESS environment variable");
+  console.error("Get it from: curl https://facilitator.0xmeta.ai/v1/supported");
+  process.exit(1);
+}
+
+const facilitatorUrl = process.env.FACILITATOR_URL;
+if (!facilitatorUrl) {
+  console.error("❌ FACILITATOR_URL environment variable is required");
+  process.exit(1);
+}
+
+const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+const app = express();
+
+// Apply x402 payment middleware
+app.use(
+  paymentMiddleware(
+    {
+      // Define protected resources
+      "GET /weather": {
+        accepts: [
+          {
+            scheme: "exact",
+            price: "$0.011",                    // Your price + facilitator fee
+            network: "eip155:84532",            // CAIP-2 format (Base Sepolia)
+            payTo: evmAddress,                  // Treasury address
+          },
+        ],
+        description: "Weather data",
+        mimeType: "application/json",
+      },
+      
+      "GET /premium/data": {
+        accepts: [
+          {
+            scheme: "exact",
+            price: "$0.021",                    // Different price point
+            network: "eip155:84532",
+            payTo: evmAddress,
+          },
+        ],
+        description: "Premium analytics",
+        mimeType: "application/json",
+      },
+    },
+    // Configure facilitator client
+    new x402ResourceServer(facilitatorClient)
+      .register("eip155:84532", new ExactEvmScheme()),
+  ),
+);
+
+// Protected route handlers
+app.get("/weather", (req, res) => {
+  res.send({
+    report: {
+      weather: "sunny",
+      temperature: 70,
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
+
+app.get("/premium/data", (req, res) => {
+  res.send({
+    analytics: {
+      metric: "premium_data",
+      value: 42,
+    },
+  });
+});
+
+app.listen(4021, () => {
+  console.log(`🚀 Server listening at http://localhost:4021`);
+  console.log(`📍 Protected resources:`);
+  console.log(`   - GET /weather ($0.011)`);
+  console.log(`   - GET /premium/data ($0.021)`);
+});
+```
+
+```env .env
+# ✅ CRITICAL: Use treasury address, NOT your merchant address
+# Get from: curl https://facilitator.0xmeta.ai/v1/supported
+EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+
+# Your merchant address (where you'll receive funds after fees)
+MERCHANT_ADDRESS=0xa821f428ef8cc9f54a9915336a82220853059090
+
+# Facilitator endpoint
+FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+```
+
+```json package.json
+{
+  "name": "x402-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "dev": "tsx watch server.ts"
+  },
+  "dependencies": {
+    "@x402/express": "latest",
+    "@x402/evm": "latest",
+    "@x402/core": "latest",
+    "express": "^4.18.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "@types/express": "latest"
+  }
+}
+```
+
+</CodeGroup>
+
+### Running the Server
+
+```bash
+# Install dependencies
+npm install
+
+# Start server
+npm start
+```
+
+**Expected output:**
+```
+🚀 Server listening at http://localhost:4021
+📍 Protected resources:
+   - GET /weather ($0.011)
+   - GET /premium/data ($0.021)
+```
+
+---
+
+## x402 v1 Integration (Legacy)
+
+### Installation
+
+```bash
+npm install x402-express
+```
+
+### Complete Server Setup
+
+<CodeGroup>
+
+```typescript server-v1.ts
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware, Resource, type SolanaAddress } from "x402-express";
+
+config(); 
+
+// ✅ Treasury address from /supported endpoint
+const facilitatorUrl = process.env.FACILITATOR_URL as Resource;
+const payTo = process.env.EVM_ADDRESS as `0x${string}` | SolanaAddress;
+
+if (!facilitatorUrl || !payTo) {
+  console.error("Missing required environment variables");
+  process.exit(1);
+}
+
+const app = express();
+
+app.use(
+  paymentMiddleware(
+    payTo,  // Treasury address (first parameter in v1)
+    {
+      // Protected resources
+      "GET /weather": {
+        price: "$0.011",            // USDC amount in dollars
+        network: "base-sepolia",     // Network name (v1 format)
+      },
+      
+      "/premium/*": {
+        // Can also define atomic amounts
+        price: {
+          amount: "100000",
+          asset: {
+            address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            decimals: 6,
+            eip712: {
+              name: "USDC",
+              version: "2",
+            },
+          },
+        },
+        network: "base-sepolia",
+      },
+    },
+    {
+      // Facilitator config
+      url: facilitatorUrl,
+    },
+  ),
+);
+
+app.get("/weather", (req, res) => {
+  res.send({
+    report: {
+      weather: "sunny",
+      temperature: 70,
+    },
+  });
+});
+
+app.get("/premium/content", (req, res) => {
+  res.send({
+    content: "This is premium content",
+  });
+});
+
+app.listen(4021, () => {
+  console.log(`Server listening at http://localhost:4021`);
+});
+```
+
+```env .env
+# Same configuration as v2
+EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+MERCHANT_ADDRESS=0xa821f428ef8cc9f54a9915336a82220853059090
+FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+```
+
+</CodeGroup>
+
+---
+
+## Network Mappings
+
+### v1 → v2 Network Conversion
+
+| x402 v1 | x402 v2 | Chain ID |
+|---------|---------|----------|
+| `"base-sepolia"` | `"eip155:84532"` | 84532 |
+| `"base"` | `"eip155:8453"` | 8453 |
+
+### CAIP-2 Format (v2)
+
+CAIP-2 format: `{namespace}:{reference}`
+
+Examples:
+- `eip155:84532` - Base Sepolia
+- `eip155:8453` - Base Mainnet
+- `eip155:1` - Ethereum Mainnet
+
+---
+
+## Treasury-First Architecture
+
+### Why Treasury Address?
+
+<AccordionGroup>
+  <Accordion title="Technical Requirement">
+    EIP-3009 `transferWithAuthorization` signatures are cryptographically bound to a specific recipient. They cannot be split or modified after signing.
+    
+    **Problem:** If client authorizes to merchant, facilitator cannot collect fees.
+    
+    **Solution:** Client authorizes to treasury → Treasury forwards to merchant.
+  </Accordion>
+
+  <Accordion title="Discovery via /supported">
+    Get the treasury address programmatically:
+    
+    ```bash
+    curl https://facilitator.0xmeta.ai/v1/supported
+    ```
+    
+    ```json
+    {
+      "signers": {
+        "eip155:*": ["0x5d791e3554d0e83f171126905bda1640bf6f9a8b"]
+      }
+    }
+    ```
+    
+    ✅ Use `signers["eip155:*"][0]` as your `EVM_ADDRESS`
+  </Accordion>
+
+  <Accordion title="Automatic Forwarding">
+    After receiving payment, treasury automatically forwards merchant portion:
+    
+    ```
+    Client pays: $0.011 USDC
+    Treasury keeps: $0.01 USDC (fee)
+    Merchant receives: $0.001 USDC (automatic)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Testing Your Integration
+
+### 1. Start Server
+
+```bash
+npm start
+```
+
+### 2. Test with x402 Client
+
+<CodeGroup>
+
+```bash cURL
+# Request protected resource
+curl http://localhost:4021/weather
+```
+
+```typescript client.ts
+import { config } from "dotenv";
+import { x402Client, wrapAxiosWithPayment, x402HTTPClient } from "@x402/axios";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { privateKeyToAccount } from "viem/accounts";
+import axios from "axios";
+
+config();
+
+const evmPrivateKey = process.env.EVM_PRIVATE_KEY as `0x${string}`;
+const baseURL = process.env.RESOURCE_SERVER_URL || "http://localhost:4021";
+const endpointPath = process.env.ENDPOINT_PATH || "/weather";
+const url = `${baseURL}${endpointPath}`;
+
+async function main(): Promise<void> {
+  const evmSigner = privateKeyToAccount(evmPrivateKey);
+
+  const client = new x402Client();
+  registerExactEvmScheme(client, { signer: evmSigner });
+
+  const api = wrapAxiosWithPayment(axios.create(), client);
+
+  console.log(`Making request to: ${url}\n`);
+  const response = await api.get(url);
+  const body = response.data;
+  console.log("Response body:", body);
+
+  if (response.status < 400) {
+    const paymentResponse = new x402HTTPClient(client).getPaymentSettleResponse(
+      name => response.headers[name.toLowerCase()],
+    );
+    console.log("\nPayment response:", paymentResponse);
+  }
+}
+
+main().catch(error => {
+  console.error(error?.response?.data?.error ?? error);
+  process.exit(1);
+});
+```
+
+</CodeGroup>
+
+### Expected Flow
+
+```
+1. ✅ Client requests /weather
+2. ✅ Server returns 402 Payment Required
+   Headers: payTo = 0x5d79... (treasury)
+3. ✅ Client creates EIP-3009 authorization
+   to: 0x5d79... (treasury)
+   value: $0.011
+4. ✅ Client sends authorization to server
+5. ✅ Server forwards to facilitator
+6. ✅ Facilitator verifies authorization
+7. ✅ Facilitator settles payment
+   a. Client → Treasury ($0.011)
+   b. Treasury → Merchant ($0.001, automatic)
+   c. Treasury keeps fee ($0.01)
+8. ✅ Server returns 200 OK + weather data
+```
+
+---
+
+## Production Deployment
+
+### Environment Variables
+
+```env
+# Production config
+EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+MERCHANT_ADDRESS=0xYourActualMerchantAddress
+FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+NODE_ENV=production
+PORT=4021
+```
+
+### Network Selection
+
+**For production:**
+- v2: Use `"eip155:8453"` (Base Mainnet)
+- v1: Use `"base"` (Base Mainnet)
+
+**For testing:**
+- v2: Use `"eip155:84532"` (Base Sepolia)
+- v1: Use `"base-sepolia"` (Base Sepolia)
+
+### Checklist
+
+<Steps>
+  <Step title="Verify Treasury Address">
+    ```bash
+    curl https://facilitator.0xmeta.ai/v1/supported
+    ```
+    Confirm `signers["eip155:*"][0]` matches your `EVM_ADDRESS`
+  </Step>
+  
+  <Step title="Test on Sepolia">
+    - Use Base Sepolia testnet
+    - Get testnet USDC from Circle faucet
+    - Verify payments work end-to-end
+  </Step>
+  
+  <Step title="Switch to Mainnet">
+    - Update network to `eip155:8453` (v2) or `base` (v1)
+    - Use real USDC
+    - Monitor first few settlements closely
+  </Step>
+  
+  <Step title="Monitor Settlements">
+    Check settlement responses for:
+    - `merchant_forward_tx` - Forwarding transaction hash
+    - `merchant_forwarded: true` - Confirmation of automatic forward
+  </Step>
+</Steps>
+
+---
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Payment must be to treasury, not merchant">
+    **Cause:** Server is configured with merchant address instead of treasury
+    
+    **Solution:**
+    ```bash
+    # Get correct treasury address
+    curl https://facilitator.0xmeta.ai/v1/supported
+    
+    # Update .env
+    EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b  # Treasury
+    ```
+  </Accordion>
+
+  <Accordion title="Client authorizes to wrong address">
+    **Cause:** Middleware returning merchant address in 402 response
+    
+    **Solution:** Ensure `payTo` in middleware config is treasury address
+    
+    ```typescript
+    paymentMiddleware(
+      {
+        "GET /resource": {
+          accepts: [{
+            payTo: "0x5d79...",  // ✅ Treasury, not merchant
+          }]
+        }
+      }
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Settlement fails: authorization expired">
+    **Cause:** Client's `validBefore` timestamp too short
+    
+    **Solution:** Client should set longer validity:
+    ```javascript
+    validBefore: String(Math.floor(Date.now() / 1000) + 86400)  // 24 hours
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Pricing Configuration
+
+### Setting Your Price
+
+```typescript
+// v2
+accepts: [{
+  price: "$0.011",  // Your price + $0.01 facilitator fee
+}]
+
+// v1
+price: "$0.011"
+```
+
+**Example Pricing:**
+- Merchant wants: $0.001
+- Facilitator fee: $0.01
+- **Total price:** `"$0.011"`
+
+### Multiple Price Points
+
+```typescript
+// v2
+{
+  "GET /basic": {
+    accepts: [{ price: "$0.011" }]  // $0.001 + $0.01 fee
+  },
+  "GET /premium": {
+    accepts: [{ price: "$0.101" }]  // $0.091 + $0.01 fee
+  }
+}
+```
+
+---
+
+## Monitoring
+
+### Check Settlement Status
+
+Settlement responses include forwarding information:
+
+```json
+{
+  "settlement_id": "stl_xyz",
+  "status": "settled",
+  "details": {
+    "merchant_forward_tx": "0x123...",
+    "merchant_forwarded": true,
+    "merchant_amount": "1000",
+    "facilitator_fee": "10000"
+  }
+}
+```
+
+### Verify on Block Explorer
+
+**Base Sepolia:**
+```
+https://sepolia.basescan.org/tx/{merchant_forward_tx}
+```
+
+**Base Mainnet:**
+```
+https://basescan.org/tx/{merchant_forward_tx}
+```
+
+---
+
+## Migration: v1 → v2
+
+### Step 1: Update Dependencies
+
+```bash
+npm uninstall x402-express
+npm install @x402/express @x402/evm @x402/core
+```
+
+### Step 2: Update Imports
+
+```typescript
+// Before (v1)
+import { paymentMiddleware, Resource } from "x402-express";
+
+// After (v2)
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+```
+
+### Step 3: Update Middleware Config
+
+```typescript
+// Before (v1)
+app.use(
+  paymentMiddleware(
+    payTo,
+    {
+      "GET /weather": {
+        price: "$0.011",
+        network: "base-sepolia",
+      },
+    },
+    { url: facilitatorUrl },
+  ),
+);
+
+// After (v2)
+const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+
+app.use(
+  paymentMiddleware(
+    {
+      "GET /weather": {
+        accepts: [{
+          scheme: "exact",
+          price: "$0.011",
+          network: "eip155:84532",  // CAIP-2 format
+          payTo: evmAddress,
+        }],
+      },
+    },
+    new x402ResourceServer(facilitatorClient)
+      .register("eip155:84532", new ExactEvmScheme()),
+  ),
+);
+```
+
+### Step 4: Update Network Identifiers
+
+| v1 | v2 |
+|----|-----|
+| `"base-sepolia"` | `"eip155:84532"` |
+| `"base"` | `"eip155:8453"` |
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore verify and settle endpoints
+  </Card>
+  
+  <Card title="Pricing Guide" icon="dollar-sign" href="/pricing">
+    Understand fee structure
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Learn system design
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/api-reference/errors">
+    Handle errors properly
+  </Card>
+</CardGroup>
+
+<Check>
+**Integration complete!** Your server is now accepting x402 payments with treasury-first architecture.
+</Check>
