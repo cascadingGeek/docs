@@ -1,72 +1,72 @@
----
+--- 
 title: "Quick Start"
 description: "Get started with 0xmeta x402 facilitator in 5 minutes"
 ---
 
 ## Overview
 
-0xmeta is an **x402-compliant payment facilitator** that enables gasless payments on Base networks using EIP-3009 transferWithAuthorization.
+0xmeta is an **x402-compliant payment facilitator** that enables gasless payments on Base networks using EIP-3009 with **post-settlement fee collection**.
 
 <Note>
-**Treasury-First Architecture:** Payments flow through 0xmeta's treasury for automatic fee collection, then forward to your merchant address. No USDC approvals needed!
+**Post-Settlement Fees:** Customer payments go directly to your address. The facilitator collects a $0.01 fee from your pre-approved USDC balance after each settlement.
 </Note>
 
 ## What You Need
 
 <Steps>
   <Step title="Your Merchant Address">
-    An Ethereum address where you'll receive payments (after fees)
+    An Ethereum address where you'll receive customer payments
   </Step>
   
-  <Step title="Treasury Address">
-    0xmeta's treasury address from `/supported` endpoint
-    
-    **For Base Sepolia:** `0x5d791e3554d0e83f171126905bda1640bf6f9a8b`
+  <Step title="USDC for Fees">
+    ~100 USDC for facilitator fees (covers ~10,000 settlements)
   </Step>
   
-  <Step title="x402 Express SDK">
-    Install the x402 express middleware for your server
-    
-    ```bash
-    npm install @x402/express @x402/evm @x402/core
-    ```
+  <Step title="ETH for Gas">
+    ~0.001 ETH for one-time approval transaction
   </Step>
 </Steps>
 
 ---
 
-## Step 1: Get Treasury Address
+## Three-Step Setup
 
-Query the facilitator to get the treasury address:
+### Step 1: Approve Facilitator
+
+The facilitator collects fees from your USDC balance via `transferFrom`. This requires one-time approval:
 
 ```bash
-curl https://facilitator.0xmeta.ai/v1/supported
+# Install dependencies
+npm install ethers dotenv
+
+# Configure
+export EVM_PRIVATE_KEY=0x...
+export NETWORK=sepolia  # or mainnet
+
+# Run approval
+node approve-facilitator.mjs
 ```
 
-**Response:**
-```json
-{
-  "kinds": [
-    { "x402Version": 2, "scheme": "exact", "network": "eip155:84532" },
-    { "x402Version": 2, "scheme": "exact", "network": "eip155:8453" },
-    { "x402Version": 1, "scheme": "exact", "network": "base-sepolia" },
-    { "x402Version": 1, "scheme": "exact", "network": "base" }
-  ],
-  "signers": {
-    "eip155:*": ["0x5d791e3554d0e83f171126905bda1640bf6f9a8b"]
-  }
-}
+**What this does:**
+```solidity
+USDC.approve(treasury, 100 * 10^6);  // Approve 100 USDC
 ```
 
-✅ **Use the address from `signers["eip155:*"][0]`** as your `EVM_ADDRESS` (NOT your merchant address!)
+**Script:** See [approve-facilitator.mjs](/guides/getting-started#approval-script-reference)
+
+<Check>
+**Expected:** Approval of 100 USDC = 10,000 settlements
+</Check>
 
 ---
 
-## Step 2: Setup Server (x402 v2)
+### Step 2: Setup Server
+
+Install x402 middleware and configure with YOUR merchant address:
 
 <CodeGroup>
 
-```typescript server.ts
+```typescript server.ts (x402 v2)
 import { config } from "dotenv";
 import express from "express";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
@@ -75,19 +75,8 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 
 config();
 
-// ✅ CRITICAL: Use treasury address from /supported endpoint
 const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
-
-if (!evmAddress) {
-  console.error("Missing EVM_ADDRESS (treasury address from /supported)");
-  process.exit(1);
-}
-
-const facilitatorUrl = process.env.FACILITATOR_URL;
-if (!facilitatorUrl) {
-  console.error("❌ FACILITATOR_URL environment variable is required");
-  process.exit(1);
-}
+const facilitatorUrl = "https://facilitator.0xmeta.ai/v1";
 
 const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
 const app = express();
@@ -96,53 +85,88 @@ app.use(
   paymentMiddleware(
     {
       "GET /weather": {
-        accepts: [
-          {
-            scheme: "exact",
-            price: "$0.011",              // Your price + $0.01 fee
-            network: "eip155:84532",      // Base Sepolia (CAIP-2 format)
-            payTo: evmAddress,            // ✅ Treasury address
-          },
-        ],
-        description: "Weather data",
-        mimeType: "application/json",
-      },
+        accepts: [{
+          scheme: "exact",
+          price: "$0.02",              // Your price + $0.01 fee
+          network: "eip155:84532",      // Base Sepolia
+          payTo: evmAddress,            // YOUR address
+        }],
+        description: "Weather data"
+      }
     },
     new x402ResourceServer(facilitatorClient)
-      .register("eip155:84532", new ExactEvmScheme()),
-  ),
+      .register("eip155:84532", new ExactEvmScheme())
+  )
 );
 
 app.get("/weather", (req, res) => {
-  res.send({
-    report: {
-      weather: "sunny",
-      temperature: 70,
-    },
-  });
+  res.send({ weather: "sunny", temperature: 70 });
 });
 
 app.listen(4021, () => {
-  console.log(`Server listening at http://localhost:4021`);
+  console.log(`Server ready at http://localhost:4021`);
 });
 ```
 
+```typescript server.ts (x402 v1)
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware } from "x402-express";
+
+config();
+
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
+const facilitatorUrl = "https://facilitator.0xmeta.ai/v1";
+
+const app = express();
+
+app.use(
+  paymentMiddleware(
+    evmAddress,  // YOUR address
+    {
+      "GET /weather": {
+        price: "$0.02",
+        network: "base-sepolia",
+      }
+    },
+    { url: facilitatorUrl }
+  )
+);
+
+app.get("/weather", (req, res) => {
+  res.send({ weather: "sunny", temperature: 70 });
+});
+
+app.listen(4021);
+```
+
 ```env .env
-# ✅ Treasury address from /supported endpoint (NOT your merchant address!)
-EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+# YOUR merchant address (receives customer payments)
+EVM_ADDRESS=0xA821f428Ef8cC9f54A9915336A82220853059090
 
 # Facilitator URL
 FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
 ```
 
+```bash Install (v2)
+npm install @x402/express @x402/evm @x402/core express dotenv
+```
+
+```bash Install (v1)
+npm install x402-express express dotenv
+```
+
 </CodeGroup>
+
+<Warning>
+**Critical:** Use YOUR merchant address in `payTo`, not the facilitator treasury. Customer payments must go directly to you.
+</Warning>
 
 ---
 
-## Step 3: Start Server
+### Step 3: Start Server
 
 ```bash
-npm install
 npm start
 ```
 
@@ -156,166 +180,37 @@ Your server is now accepting x402 payments! 🎉
 sequenceDiagram
     participant Client
     participant Server
-    participant Treasury
+    participant Facilitator
     participant Merchant
 
+    Note over Merchant: ONE-TIME SETUP
+    Merchant->>Facilitator: approve(treasury, 100 USDC)
+    
     Client->>Server: GET /weather
-    Server-->>Client: 402 Payment Required<br/>payTo: 0x5d79... (treasury)
+    Server-->>Client: 402 Payment Required<br/>payTo: merchant_address
     
-    Client->>Client: Creates EIP-3009 authorization<br/>to: 0x5d79... (treasury)<br/>value: $0.011
+    Client->>Client: Create authorization<br/>to: merchant_address<br/>value: $0.02
     
-    Client->>Server: Sends authorization + signature
-    Server->>Treasury: Verify payment
-    Treasury-->>Server: ✅ Verified
+    Client->>Facilitator: Verify + Settle
     
-    Server->>Treasury: Settle payment
-    Treasury->>Treasury: Receives $0.011
-    Treasury->>Merchant: Forwards $0.001 (automatic)
-    Treasury->>Treasury: Keeps $0.01 (fee)
+    rect rgb(255, 245, 230)
+        Note over Facilitator: Fee Collection
+        Facilitator->>Merchant: transferFrom(merchant, treasury, $0.01)
+    end
+    
+    rect rgb(230, 245, 255)
+        Note over Facilitator,Merchant: Settlement
+        Facilitator->>Merchant: Client → Merchant ($0.02)
+    end
     
     Server-->>Client: 200 OK + Weather data
 ```
 
 **Key Points:**
-- ✅ Client pays to **treasury** ($0.011 USDC)
-- ✅ Treasury keeps **fee** ($0.01 USDC)
-- ✅ Treasury forwards **payment** to merchant ($0.001 USDC) - **AUTOMATIC**
-- ✅ Merchant receives payment with **zero gas costs**
-
----
-
-## Why Treasury-First?
-
-<AccordionGroup>
-  <Accordion title="Why can't clients pay directly to merchants?">
-    **Technical Constraint:** EIP-3009 `transferWithAuthorization` signatures are cryptographically bound to a specific recipient. Once signed, they cannot be split or modified.
-    
-    If clients authorize to merchant addresses, facilitators cannot intercept fees atomically.
-  </Accordion>
-
-  <Accordion title="Do I need to approve USDC spending?">
-    **No!** That's the benefit of treasury-first flow. 
-    
-    - Old approach: Merchant approves USDC → Facilitator collects fee
-    - New approach: Treasury receives payment → Auto-forwards to merchant
-    
-    Zero setup required from merchants.
-  </Accordion>
-
-  <Accordion title="How do I know payments reach me?">
-    Check settlement responses:
-    
-    ```json
-    {
-      "settlement_id": "stl_xyz",
-      "status": "settled",
-      "details": {
-        "merchant_forward_tx": "0x...",
-        "merchant_forwarded": true,
-        "merchant_amount": "1000"
-      }
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
----
-
-## x402 v1 Support (Legacy)
-
-<CodeGroup>
-
-```typescript server-v1.ts
-import { config } from "dotenv";
-import express from "express";
-import { paymentMiddleware, Resource } from "x402-express";
-
-config(); 
-
-// ✅ Treasury address from /supported
-const facilitatorUrl = process.env.FACILITATOR_URL as Resource;
-const payTo = process.env.EVM_ADDRESS as `0x${string}`;
-
-if (!facilitatorUrl || !payTo) {
-  console.error("Missing required environment variables");
-  process.exit(1);
-}
-
-const app = express();
-
-app.use(
-  paymentMiddleware(
-    payTo,  // ✅ Treasury address
-    {
-      "GET /weather": {
-        price: "$0.011",
-        network: "base-sepolia",
-      },
-    },
-    {
-      url: facilitatorUrl,
-    },
-  ),
-);
-
-app.get("/weather", (req, res) => {
-  res.send({
-    report: {
-      weather: "sunny",
-      temperature: 70,
-    },
-  });
-});
-
-app.listen(4021, () => {
-  console.log(`Server listening at http://localhost:4021`);
-});
-```
-
-```env .env
-# Same config as v2
-EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
-FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
-```
-
-</CodeGroup>
-
----
-
-## Testing
-
-### Get Testnet Assets
-
-<CardGroup cols={2}>
-  <Card title="Base Sepolia ETH" icon="ethereum" href="https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet">
-    Free testnet ETH from Coinbase faucet
-  </Card>
-  
-  <Card title="Base Sepolia USDC" icon="dollar-sign" href="https://faucet.circle.com/">
-    Free testnet USDC from Circle faucet
-  </Card>
-</CardGroup>
-
-### Test Payment Flow
-
-```bash
-# 1. Start your server
-npm start
-
-# 2. Use x402 client to make request
-npm run test:client
-```
-
-Expected flow:
-```
-✅ Client requests /weather
-✅ Server returns 402 with treasury address
-✅ Client authorizes payment to treasury
-✅ Facilitator verifies authorization
-✅ Facilitator settles (client → treasury → merchant)
-✅ Server returns 200 + weather data
-✅ Merchant receives payment automatically
-```
+- ✅ Client authorizes payment to **YOUR address** ($0.02)
+- ✅ You receive 100% of customer payment
+- ✅ Facilitator collects $0.01 fee from your approved balance
+- ✅ No facilitator custody of customer funds
 
 ---
 
@@ -328,7 +223,7 @@ Expected flow:
 | **Chain ID** | `84532` |
 | **CAIP-2** | `eip155:84532` |
 | **USDC** | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
-| **Treasury** | `0x5d791e3554d0e83f171126905bda1640bf6f9a8b` |
+| **Treasury** | `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B` |
 | **RPC** | `https://sepolia.base.org` |
 
 ### Base Mainnet (Production)
@@ -338,31 +233,162 @@ Expected flow:
 | **Chain ID** | `8453` |
 | **CAIP-2** | `eip155:8453` |
 | **USDC** | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| **Treasury** | `0x5d791e3554d0e83f171126905bda1640bf6f9a8b` |
+| **Treasury** | `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B` |
 | **RPC** | `https://mainnet.base.org` |
+
+---
+
+## Testing
+
+### Get Testnet Assets
+
+<CardGroup cols={2}>
+  <Card title="Base Sepolia ETH" icon="ethereum" href="https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet">
+    Free testnet ETH
+  </Card>
+  
+  <Card title="Base Sepolia USDC" icon="dollar-sign" href="https://faucet.circle.com/">
+    Free testnet USDC
+  </Card>
+</CardGroup>
+
+### Test Payment Flow
+
+```bash
+# 1. Start server
+npm start
+
+# 2. Use x402 client (or curl)
+# Client will:
+# - Request /weather
+# - Receive 402 with your address
+# - Create authorization to your address
+# - Submit to facilitator
+# - Receive weather data
+```
+
+Expected flow:
+```
+✅ Client requests /weather
+✅ Server returns 402 with YOUR address
+✅ Client authorizes payment to YOUR address
+✅ Facilitator verifies authorization
+✅ Facilitator collects $0.01 from YOUR approved balance
+✅ Facilitator settles: Client → YOU ($0.02)
+✅ Server returns 200 + weather data
+```
+
+---
+
+## Monitoring
+
+### Check Remaining Settlements
+
+```bash
+node check-allowance.mjs
+
+# Output:
+# 📍 Base Sepolia
+#    USDC Balance: 500.00 USDC
+#    Fee Allowance: 95.50 USDC
+#    Settlements: 9,550
+#    ✅ Good
+```
+
+**Script:** See [check-allowance.mjs](/guides/getting-started#monitoring-script-reference)
+
+### Top Up When Low
+
+```bash
+# When allowance runs low, approve more
+node approve-facilitator.mjs
+```
+
+---
+
+## Production Deployment
+
+### Switch to Base Mainnet
+
+```typescript
+// v2
+network: "eip155:8453"  // Base Mainnet
+
+// v1
+network: "base"
+```
+
+### Run Approval on Mainnet
+
+```bash
+# Get real USDC and ETH first!
+NETWORK=mainnet node approve-facilitator.mjs
+```
+
+<Warning>
+**Production checklist:**
+- ✅ Tested on Sepolia thoroughly
+- ✅ Approved USDC on mainnet
+- ✅ Verified merchant address receives payments
+- ✅ Monitoring setup for allowance
+- ✅ Private keys secured
+</Warning>
+
+---
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Error: insufficient_allowance">
+    **Cause:** You haven't approved facilitator
+    
+    **Solution:**
+    ```bash
+    node approve-facilitator.mjs
+    ```
+  </Accordion>
+
+  <Accordion title="Customer payments not arriving">
+    **Cause:** Wrong address in `payTo`
+    
+    **Solution:** Verify you're using YOUR merchant address (not treasury):
+    ```typescript
+    payTo: process.env.EVM_ADDRESS  // ✅ Your address
+    ```
+  </Accordion>
+
+  <Accordion title="Settlement fails">
+    **Causes:**
+    - Insufficient USDC balance for fees
+    - Authorization expired
+    - Nonce already used
+    
+    **Solution:** Check facilitator error response for specific reason
+  </Accordion>
+</AccordionGroup>
 
 ---
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="x402 Integration Guide" icon="book" href="/x402-integration">
-    Complete x402 v1 and v2 integration
-  </Card>
-  
-  <Card title="API Reference" icon="code" href="/api-reference/introduction">
-    Explore all endpoints
-  </Card>
-  
-  <Card title="Pricing Details" icon="dollar-sign" href="/pricing">
-    Understand fee structure
+  <Card title="Complete Guide" icon="book" href="/guides/getting-started">
+    Full setup documentation
   </Card>
   
   <Card title="Architecture" icon="diagram-project" href="/architecture">
-    Learn how it works
+    Understand fee collection
+  </Card>
+  
+  <Card title="x402 Integration" icon="plug" href="/x402-integration">
+    Both v1 and v2 examples
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore endpoints
   </Card>
 </CardGroup>
 
 <Check>
-**You're ready!** Start accepting x402 payments with treasury-first flow.
+**You're ready!** Approve facilitator, configure your server with YOUR address, and start accepting payments.
 </Check>

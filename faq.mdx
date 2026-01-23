@@ -1,59 +1,479 @@
-## FAQ
+---
+title: "FAQ"
+description: "Frequently asked questions about 0xmeta facilitator"
+---
+
+## General Questions
 
 <AccordionGroup>
   <Accordion title="Do I need an account to use 0xmeta.ai?">
-    **No!** Just start making API requests. No signup, no API keys needed.
+    **No!** The facilitator is permissionless. No signup, no API keys, no registration.
+    
+    Just:
+    1. Approve facilitator for USDC spending (one-time)
+    2. Integrate x402 middleware
+    3. Start accepting payments
   </Accordion>
 
-{" "}
+  <Accordion title="What is x402?">
+    x402 is a protocol for HTTP-based payments. It's like a "402 Payment Required" status code, but with built-in payment authorization using blockchain signatures.
+    
+    **Key principle:** Customers pay merchants directly (no intermediaries).
+  </Accordion>
 
-<Accordion title="How do you charge fees without an account?">
-  Fees are automatically deducted during settlement. We receive the settlement
-  fee, and you receive the remainder.
-</Accordion>
-
-{" "}
-
-<Accordion title="Can I avoid the settlement fee?">
-  No - the 0.5% fee is how we provide the service. However, it's much lower than
-  traditional payment processors (2.9% + $0.30).
-</Accordion>
-
-{" "}
-
-<Accordion title="What if settlement fails?">
-  If settlement fails, you pay **$0**. Fees are only charged on successful
-  settlements.
-</Accordion>
-
-{" "}
-
-<Accordion title="Are there refunds?">
-  Since blockchain transactions are final and we only charge on success, refunds
-  aren't applicable. If you have an issue, contact support.
-</Accordion>
-
-  <Accordion title="Do you support custom pricing for enterprises?">
-    Yes! For 10,000+ settlements per month, contact sales@0xmeta.ai for custom rates.
+  <Accordion title="What networks are supported?">
+    Currently:
+    - **Base Mainnet** (Chain ID: 8453)
+    - **Base Sepolia** (Chain ID: 84532, testnet)
+    
+    More networks coming soon.
   </Accordion>
 </AccordionGroup>
+
+---
+
+## Merchant Setup
+
+<AccordionGroup>
+  <Accordion title="Why do I need to approve the facilitator?">
+    **Technical reason:** The facilitator collects a $0.01 fee per settlement from your USDC balance using the standard ERC-20 `transferFrom` pattern.
+    
+    **How it works:**
+    ```solidity
+    // You approve facilitator (one-time)
+    USDC.approve(treasury, 100 * 10^6); // 100 USDC
+    
+    // Later, facilitator collects fee per settlement
+    USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
+    ```
+    
+    **Why this pattern:**
+    - x402 requires customers pay merchants directly (trust-minimization)
+    - Facilitator can't split customer payments
+    - Solution: Merchant pays fee separately via approval
+  </Accordion>
+
+  <Accordion title="How do I approve the facilitator?">
+    Use our provided script:
+    
+    ```bash
+    # Configure
+    export EVM_PRIVATE_KEY=0x...
+    export NETWORK=mainnet  # or sepolia
+    
+    # Run approval
+    node approve-facilitator.mjs
+    ```
+    
+    This approves the facilitator treasury to spend USDC on your behalf.
+    
+    See [x402 Integration Guide](/x402-integration#merchant-approval-setup) for details.
+  </Accordion>
+
+  <Accordion title="How much should I approve?">
+    **Recommended:** 100-1000 USDC
+    
+    **Calculation:** `Approval = Settlements × $0.01`
+    
+    Examples:
+    - 100 USDC = 10,000 settlements
+    - 500 USDC = 50,000 settlements
+    - 1000 USDC = 100,000 settlements
+    
+    **Avoid:** Infinite approval (max uint256) for security reasons.
+  </Accordion>
+
+  <Accordion title="Can I revoke approval?">
+    **Yes!** At any time:
+    
+    ```bash
+    # Set approval to 0
+    APPROVAL_AMOUNT=0 node approve-facilitator.mjs
+    ```
+    
+    **Effect:** All future settlements will fail with `insufficient_allowance` error. Customers won't be charged.
+    
+    To resume: Re-run approval with desired amount.
+  </Accordion>
+
+  <Accordion title="How do I check my remaining allowance?">
+    Use our monitoring script:
+    
+    ```bash
+    node check-allowance.mjs
+    
+    # Output:
+    # 📍 Base Mainnet
+    #    USDC Balance: 500.00 USDC
+    #    Fee Allowance: 95.50 USDC
+    #    Settlements: 9,550
+    #    ✅ Good
+    ```
+    
+    Set up automated monitoring via cron or alerts.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Trust & Security
+
+<AccordionGroup>
+  <Accordion title="How do I know the facilitator won't steal customer funds?">
+    **It's cryptographically impossible.**
+    
+    **Why:**
+    1. Customers authorize payments directly to **your address** (not facilitator)
+    2. EIP-3009 signatures are cryptographically bound to recipient
+    3. Facilitator has zero access to customer authorizations
+    4. Facilitator cannot redirect customer funds
+    
+    **Technical details:**
+    ```javascript
+    // Customer signs authorization
+    const authorization = {
+      from: customerAddress,
+      to: YOUR_MERCHANT_ADDRESS,  // ← Cryptographically bound
+      value: "20000",
+      signature: "0x..."
+    };
+    
+    // Facilitator can only execute this EXACT transfer
+    // Cannot change recipient or amount
+    ```
+    
+    This is the core principle of x402: **trust-minimization**.
+  </Accordion>
+
+  <Accordion title="Can the facilitator drain my USDC balance?">
+    **No.** Only the approved amount is accessible.
+    
+    **Example:**
+    - You approve: 100 USDC
+    - Maximum risk: 100 USDC
+    - Your remaining USDC: Safe
+    
+    **Best practice:** Approve reasonable amounts (100-1000 USDC), not infinite.
+    
+    **Monitoring:** Use `check-allowance.mjs` to track remaining approval.
+  </Accordion>
+
+  <Accordion title="What if the facilitator is hacked?">
+    **Worst case:** Attacker drains your approved amount only.
+    
+    **Protection:**
+    1. **Limit approval:** Don't approve more than you're willing to risk
+    2. **Monitor regularly:** Check allowance frequently
+    3. **Revoke if suspicious:** Set approval to 0 immediately
+    
+    **Your customer funds:** Always safe (facilitator has no access).
+  </Accordion>
+
+  <Accordion title="Is this more secure than traditional payment processors?">
+    **Yes, in several ways:**
+    
+    **Traditional (Stripe, PayPal):**
+    - ❌ Custody of customer funds
+    - ❌ Can freeze/hold payments
+    - ❌ Opaque settlement process
+    
+    **0xmeta (x402):**
+    - ✅ No custody (direct to merchant)
+    - ✅ Cannot freeze payments
+    - ✅ On-chain auditable
+    - ✅ Cryptographic guarantees
+    
+    **Trade-off:** Requires blockchain familiarity and USDC approval.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Fees & Pricing
+
+<AccordionGroup>
+  <Accordion title="How are fees collected?">
+    **Post-settlement via transferFrom:**
+    
+    **Flow:**
+    1. Customer authorizes $0.02 to your address
+    2. You receive 100% of customer payment ($0.02)
+    3. Facilitator collects $0.01 fee from your approved USDC balance
+    
+    **Technical:**
+    ```solidity
+    // Step 1: Customer → Merchant (direct)
+    transferWithAuthorization(customer, merchant, 20000); // $0.02
+    
+    // Step 2: Facilitator collects fee from merchant
+    transferFrom(merchant, treasury, 10000); // $0.01
+    ```
+  </Accordion>
+
+  <Accordion title="Why does the merchant pay the fee, not the customer?">
+    **Technical constraint:** x402 requires customer payments go directly to merchants (trust-minimization). EIP-3009 signatures are cryptographically bound to exact recipient and amount. Cannot split customer payment.
+    
+    **Solution:** Merchant pays facilitator fee separately via standard ERC-20 approval.
+    
+    **Merchant pricing:** Add fee to your prices:
+    - Your price: $0.01
+    - Facilitator fee: $0.01
+    - Customer pays: $0.02
+  </Accordion>
+
+  <Accordion title="What if settlement fails after fee collection?">
+    **You paid $0.01 for the settlement attempt.**
+    
+    **Why:** Prevents free service exploitation. If facilitator provided verification/settlement attempt without charging, merchants could intentionally cause failures for free service.
+    
+    **Mitigation:** Test on Base Sepolia first, monitor settlement success rates.
+  </Accordion>
+
+  <Accordion title="Are there any hidden fees?">
+    **No.**
+    
+    **What you pay:**
+    - $0.01 USDC per successful settlement
+    
+    **What you DON'T pay:**
+    - ❌ Monthly fees
+    - ❌ Setup fees
+    - ❌ Gas fees (facilitator pays)
+    - ❌ Withdrawal fees
+    - ❌ Percentage fees
+    - ❌ Minimum volume requirements
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Technical Questions
+
+<AccordionGroup>
+  <Accordion title="What happens if I revoke approval mid-settlement?">
+    **Settlement fails gracefully.**
+    
+    **Flow:**
+    1. Customer submits payment authorization
+    2. Facilitator attempts fee collection
+    3. Fee collection fails (approval revoked)
+    4. Settlement blocked
+    5. Customer NOT charged
+    
+    **Error response:**
+    ```json
+    {
+      "error": {
+        "code": "insufficient_allowance",
+        "message": "Merchant must approve facilitator"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Can I use a different token besides USDC?">
+    **Not yet.** Currently only USDC is supported.
+    
+    **Roadmap:** Multi-token support planned (USDT, DAI, etc.)
+    
+    **Why USDC first:** Most stable, widely adopted, best EIP-3009 support.
+  </Accordion>
+
+  <Accordion title="How do I test on testnet?">
+    **Use Base Sepolia:**
+    
+    ```bash
+    # 1. Get testnet USDC (Circle faucet)
+    # 2. Approve facilitator on testnet
+    NETWORK=sepolia node approve-facilitator.mjs
+    
+    # 3. Configure server for testnet
+    # network: "eip155:84532" (v2) or "base-sepolia" (v1)
+    
+    # 4. Test payments
+    ```
+    
+    **Testnet addresses:**
+    - USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+    - Treasury: `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B`
+  </Accordion>
+
+  <Accordion title="What's the difference between x402 v1 and v2?">
+    **Network format:**
+    - **v1:** `"base-sepolia"` (string)
+    - **v2:** `"eip155:84532"` (CAIP-2 format)
+    
+    **Both supported!** Use v2 for new integrations.
+    
+    **Migration:** See [x402 Integration Guide](/x402-integration#migration-v1-v2)
+  </Accordion>
+
+  <Accordion title="How long do settlements take?">
+    **Typical timing:**
+    - Verification: < 2 seconds
+    - Fee collection: 5-10 seconds (on-chain tx)
+    - Settlement execution: 30-60 seconds (via 1Shot)
+    
+    **Total:** 35-70 seconds average
+    
+    **Factors:**
+    - Network congestion
+    - RPC provider latency
+    - 1Shot API processing time
+  </Accordion>
+
+  <Accordion title="Can I see all transactions on-chain?">
+    **Yes!** All transactions are public.
+    
+    **Fee collection:**
+    ```
+    https://basescan.org/tx/{fee_tx_hash}
+    ```
+    
+    **Settlement:**
+    ```
+    https://basescan.org/tx/{settlement_tx_hash}
+    ```
+    
+    **Merchant address activity:**
+    ```
+    https://basescan.org/address/{your_merchant_address}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: insufficient_allowance">
+    **Cause:** You haven't approved facilitator, or approval is depleted.
+    
+    **Solution:**
+    ```bash
+    # Check current allowance
+    node check-allowance.mjs
+    
+    # If low/zero, approve more
+    node approve-facilitator.mjs
+    ```
+  </Accordion>
+
+  <Accordion title="Error: fee_collection_failed">
+    **Cause:** Your USDC balance is insufficient.
+    
+    **Solution:** Add USDC to your merchant address.
+    
+    **Check balance:**
+    ```bash
+    node check-allowance.mjs
+    # Shows: USDC Balance: 0.00 USDC ← Problem
+    ```
+  </Accordion>
+
+  <Accordion title="Settlement taking too long">
+    **Normal:** 35-70 seconds
+    
+    **If longer:**
+    1. Check Base network status
+    2. Verify 1Shot API status
+    3. Check settlement status via API
+    
+    **Polling:**
+    ```javascript
+    const status = await checkSettlement(settlement_id);
+    // status: "pending" | "settled" | "failed"
+    ```
+  </Accordion>
+
+  <Accordion title="How do I get support?">
+    **Options:**
+    
+    1. **Documentation:** https://docs.0xmeta.ai
+    2. **GitHub Issues:** https://github.com/0xmetaHQ/x402-facilitator/issues
+    3. **Email:** support@0xmeta.ai
+    4. **Discord:** https://discord.gg/0xmeta
+    
+    **Include:**
+    - Settlement ID or verification ID
+    - Error message (if applicable)
+    - Network (mainnet or sepolia)
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Comparison to Alternatives
+
+<AccordionGroup>
+  <Accordion title="How is this different from Stripe?">
+    | Feature | 0xmeta | Stripe |
+    |---------|--------|--------|
+    | **Fee** | $0.01 flat | 2.9% + $0.30 |
+    | **Custody** | None | Full custody |
+    | **Settlement** | 35-70 seconds | 2-7 days |
+    | **Setup** | 1 approval tx | KYC + business verification |
+    | **Trust** | Cryptographic | Company reputation |
+    | **Refunds** | Not applicable (blockchain) | Supported |
+    | **Chargebacks** | Impossible | Supported |
+    
+    **Best for:**
+    - **0xmeta:** Micropayments, crypto-native users, no KYC
+    - **Stripe:** Traditional commerce, fiat users, chargebacks needed
+  </Accordion>
+
+  <Accordion title="How is this different from other x402 facilitators?">
+    **0xmeta:**
+    - ✅ Paid service ($0.01/settlement)
+    - ✅ Production-ready infrastructure
+    - ✅ Guaranteed uptime (99.9% SLA)
+    - ✅ Professional support
+    
+    **Free facilitators:**
+    - ⚠️ May shut down anytime
+    - ⚠️ No guarantees
+    - ⚠️ Limited support
+    
+    **Trade-off:** Pay for reliability vs. free but uncertain.
+  </Accordion>
+
+  <Accordion title="Why use a facilitator at all?">
+    **Without facilitator:**
+    - ❌ You verify signatures yourself
+    - ❌ You execute settlements on-chain
+    - ❌ You pay gas fees
+    - ❌ You handle errors/retries
+    - ❌ Complex infrastructure
+    
+    **With 0xmeta:**
+    - ✅ Signature verification handled
+    - ✅ Settlement execution managed
+    - ✅ Gas fees covered
+    - ✅ Error handling built-in
+    - ✅ Simple integration (x402 middleware)
+    
+    **Cost:** $0.01 per settlement for all infrastructure.
+  </Accordion>
+</AccordionGroup>
+
+---
 
 ## Get Started
 
 No signup required - just start building:
 
 ```bash
-curl -X POST https://facilitator.0xmeta.ai/v1/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_hash": "0x...",
-    "chain": "base",
-    "seller_address": "0x...",
-    "expected_amount": "1000000000000000000"
-  }'
+# 1. Approve facilitator
+EVM_PRIVATE_KEY=0x... node approve-facilitator.mjs
+
+# 2. Add x402 middleware
+npm install @x402/express @x402/evm @x402/core
+
+# 3. Start accepting payments
+npm start
 ```
 
 <Info>
-  Start with zero fees during verification. Only pay 0.5% when you successfully
-  settle.
+**Questions not answered here?** Check the [x402 Integration Guide](/x402-integration) or contact support@0xmeta.ai
 </Info>

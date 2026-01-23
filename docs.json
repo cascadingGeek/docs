@@ -78,6 +78,14 @@
         ]
       },
       {
+        "group": "API Reference",
+        "pages": [
+          "api-reference/introduction",
+          "api-reference/verify",
+          "api-reference/settle"
+        ]
+      },
+      {
         "group": "Advanced",
         "pages": [
           "advanced/background-workers"

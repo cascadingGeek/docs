@@ -1,483 +1,549 @@
 ---
-title: "Treasury-First Architecture"
-description: "Understanding 0xmeta's payment flow and why it works this way"
+title: "Post-Settlement Fee Collection"
+description: "Understanding 0xmeta's trust-minimized payment architecture"
 ---
 
 ## Overview
 
-0xmeta uses a **treasury-first architecture** where payments flow through 0xmeta's treasury before reaching merchants. This isn't a design choice—it's a **technical requirement** imposed by EIP-3009's cryptographic constraints.
+0xmeta uses **post-settlement fee collection** to maintain x402's core principle: **trust minimization**. Customer funds flow directly to merchants—never through the facilitator. Fees are collected separately via standard ERC-20 approval patterns.
 
 <Note>
-**TL;DR:** EIP-3009 signatures can't be split after signing. The only way to collect fees atomically is for clients to authorize payments to the treasury, which then forwards to merchants.
+**Trust-Minimized:** Customer payments go DIRECTLY to merchants. The facilitator never touches customer funds and cannot redirect payments.
 </Note>
 
 ---
 
-## The EIP-3009 Constraint
+## Payment Architecture
 
-### What is EIP-3009?
-
-EIP-3009 (`transferWithAuthorization`) allows gasless token transfers where:
-1. User signs authorization off-chain
-2. Anyone can submit the authorization on-chain
-3. Transfer executes without user paying gas
-
-###
-
- The Signature Problem
-
-```solidity
-function transferWithAuthorization(
-    address from,      // Payer
-    address to,        // ❌ Cryptographically bound
-    uint256 value,     // ❌ Cryptographically bound
-    uint256 validAfter,
-    uint256 validBefore,
-    bytes32 nonce,
-    uint8 v, bytes32 r, bytes32 s  // Signature covers ALL parameters
-) external;
-```
-
-**Key insight:** The signature cryptographically commits to BOTH the recipient (`to`) and amount (`value`). Once signed, they **cannot be changed**.
-
-### Why This Matters
-
-**Scenario: Client pays merchant directly**
-```
-❌ Problem:
-1. Client authorizes: to = merchant, value = $0.011
-2. Facilitator receives authorization
-3. Facilitator wants to collect $0.01 fee
-4. ❌ IMPOSSIBLE - signature is bound to merchant as recipient
-5. ❌ Can't redirect portion to treasury
-6. ❌ Can't modify amount
-```
-
-**The math doesn't work:**
-- Client signed: "Send $0.011 to merchant"
-- We need: "Send $0.01 to treasury + $0.001 to merchant"
-- **Can't split a single authorization into multiple transfers**
-
----
-
-## Treasury-First Solution
-
-### How It Works
-
-```
-✅ Client → Treasury (full $0.011)
-✅ Treasury keeps fee ($0.01)
-✅ Treasury → Merchant ($0.001, automatic)
-```
-
-**Why this works:**
-1. Client authorizes to treasury (single recipient ✅)
-2. Treasury receives full amount atomically
-3. Treasury immediately forwards merchant portion
-4. No signature splitting needed
-
-### Payment Flow
+### Trust-Minimized Flow
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Server
+    participant Merchant
     participant Facilitator
     participant Treasury
-    participant Merchant
 
-    Client->>Server: GET /resource
-    Server-->>Client: 402 Payment Required<br/>payTo: 0x5d79... (treasury)
+    Note over Merchant: ONE-TIME SETUP
+    Merchant->>Facilitator: approve(treasury, 100 USDC)
     
-    Note over Client: Creates EIP-3009 authorization<br/>to: 0x5d79... (treasury)<br/>value: $0.011
-
-    Client->>Server: Authorization + Signature
-    Server->>Facilitator: Verify payment
-    Facilitator-->>Server: ✅ Verified
+    Note over Client,Merchant: PAYMENT FLOW
+    Client->>Merchant: 1. Request /resource
+    Merchant-->>Client: 2. 402 Payment Required<br/>payTo: merchant_address
     
-    Server->>Facilitator: Settle payment
+    Client->>Client: 3. Create authorization<br/>to: merchant_address<br/>value: $0.02
     
-    rect rgb(200, 230, 255)
-        Note over Facilitator,Treasury: Settlement Execution
-        Facilitator->>Treasury: transferWithAuthorization
-        Treasury->>Treasury: Receives $0.011
-        Treasury->>Merchant: transfer($0.001)
-        Treasury->>Treasury: Keeps $0.01 (fee)
+    Client->>Facilitator: 4. Verify authorization
+    Facilitator-->>Client: ✅ Valid
+    
+    Client->>Facilitator: 5. Settle payment
+    
+    rect rgb(255, 245, 230)
+        Note over Facilitator,Treasury: FEE COLLECTION (Pre-Settlement)
+        Facilitator->>Treasury: transferFrom(merchant, treasury, $0.01)
+        Treasury-->>Facilitator: ✅ Fee collected
     end
     
-    Facilitator-->>Server: ✅ Settled
-    Server-->>Client: 200 OK + Resource
+    rect rgb(230, 245, 255)
+        Note over Facilitator,Merchant: SETTLEMENT (Via 1Shot API)
+        Facilitator->>Merchant: transferWithAuthorization<br/>(client → merchant, $0.02)
+        Merchant-->>Facilitator: ✅ Payment received
+    end
+    
+    Facilitator-->>Client: ✅ Settled
+    Client->>Merchant: 6. Access resource
 ```
+
+**Key Principle:** Customer funds (blue) go DIRECTLY to merchant. Fee (orange) collected separately from merchant's pre-approved balance.
 
 ---
 
-## Alternative Approaches Considered
+## Why This Architecture?
 
-### Option 1: Merchant-First with Approval ❌
+### x402 Trust-Minimization Requirement
 
+**From x402 specification:**
+> "The facilitator must never have custody or control over customer payments. All funds must flow directly from payer to payee."
+
+**Previous approach (REJECTED):**
 ```
-Client → Merchant ($0.011)
-Merchant.approve(treasury, $0.01)
-Treasury.transferFrom(merchant, $0.01)
-```
-
-**Why rejected:**
-- ❌ Requires merchant to approve USDC spending (setup friction)
-- ❌ Merchant pays gas for approval (~$0.50 on mainnet)
-- ❌ Not atomic (approval can fail)
-- ❌ Merchant needs USDC balance for fees
-- ❌ Poor developer experience
-
-### Option 2: Smart Contract Proxy ❌
-
-```
-Client → Proxy Contract ($0.011)
-Proxy splits:
-  - $0.001 → Merchant
-  - $0.01 → Treasury
+❌ Client → Treasury → Merchant
+   Problem: Facilitator custody = trust required
 ```
 
-**Why rejected:**
-- ❌ Complex smart contract development
-- ❌ Higher gas costs (proxy deployment + operations)
-- ❌ Requires security audit
-- ❌ Must deploy to every chain
-- ❌ Increased attack surface
-- ❌ Slower settlement
-
-### Option 3: Treasury-First (Current) ✅
-
+**Current approach (APPROVED):**
 ```
-Client → Treasury ($0.011)
-Treasury → Merchant ($0.001, automatic)
+✅ Client → Merchant (direct payment)
+✅ Merchant → Treasury (fee only, via approval)
+   Solution: No facilitator custody = trust-minimized
 ```
 
-**Why chosen:**
-- ✅ Simplest implementation
-- ✅ Lowest total gas costs
-- ✅ No merchant setup required
-- ✅ Atomic operation
-- ✅ Works with standard EIP-3009
-- ✅ Best developer experience
+### ERC-20 Approval Pattern
+
+Standard pattern used across DeFi:
+
+```solidity
+// Merchant approves facilitator (one-time)
+USDC.approve(facilitatorTreasury, 100 * 10^6); // 100 USDC
+
+// Later, facilitator collects fee
+USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
+```
+
+**Benefits:**
+- ✅ Standard ERC-20 pattern (well understood)
+- ✅ Merchant controls via approval amount
+- ✅ Auditable on-chain
+- ✅ Can revoke anytime (settlements will fail)
 
 ---
 
-## Benefits for Merchants
+## Payment Flow Details
 
-<CardGroup cols={2}>
-  <Card title="Zero Setup" icon="check">
-    No USDC approvals needed. Just use treasury address from `/supported`.
-  </Card>
-  
-  <Card title="Zero Gas Costs" icon="gas-pump">
-    Treasury pays gas for forwarding. Merchants receive payments without spending ETH.
-  </Card>
-  
-  <Card title="Automatic Payments" icon="bolt">
-    Forwarding happens automatically during settlement. No action required.
-  </Card>
-  
-  <Card title="Simple Integration" icon="code">
-    One environment variable: `EVM_ADDRESS` (treasury from `/supported`).
-  </Card>
-</CardGroup>
+### Step 1: One-Time Merchant Approval
 
----
-
-## x402 Compliance
-
-### Treasury Address Discovery
-
-The treasury address is fully discoverable via standard x402 protocol:
+Merchant approves facilitator treasury for USDC spending:
 
 ```bash
-curl https://facilitator.0xmeta.ai/v1/supported
+# Using provided script
+EVM_PRIVATE_KEY=0x... node approve-facilitator.mjs
+
+# Or manually via contract interaction
+usdc.approve(
+  "0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B", // Treasury
+  ethers.parseUnits("100", 6) // 100 USDC = 10,000 settlements
+)
 ```
 
+**Approval amount = settlements * $0.01**
+
+Example: 100 USDC approval = 10,000 settlements
+
+### Step 2: Client Requests Resource
+
+Client makes GET request to protected endpoint:
+
+```bash
+GET /premium-content HTTP/1.1
+Host: merchant.com
+```
+
+### Step 3: Merchant Returns 402
+
+Server responds with payment requirements:
+
 ```json
+HTTP/1.1 402 Payment Required
+x402-accept: exact;price="$0.02";network="eip155:8453";payto="0xMERCHANT"
+
 {
-  "kinds": [
-    { "x402Version": 2, "scheme": "exact", "network": "eip155:84532" },
-    { "x402Version": 1, "scheme": "exact", "network": "base-sepolia" }
-  ],
-  "signers": {
-    "eip155:*": ["0x5d791e3554d0e83f171126905bda1640bf6f9a8b"]
-  },
-  "extensions": [
-    {
-      "name": "treasury_first_forwarding",
-      "description": "Payments forwarded to merchants after fee collection",
-      "fee": {
-        "type": "flat_rate",
-        "amount": "10000",
-        "currency": "USDC"
-      }
-    }
-  ]
+  "scheme": "exact",
+  "price": "$0.02",
+  "network": "eip155:8453",
+  "payTo": "0xA821f428Ef8cC9f54A9915336A82220853059090" // ← Merchant address
 }
 ```
 
-**Key points:**
-✅ Treasury address in `signers["eip155:*"][0]`
-✅ Follows standard x402 discovery protocol
-✅ Fee structure disclosed in extensions
-✅ Fully transparent to clients and servers
+**Critical:** `payTo` must be merchant address, NOT treasury.
 
----
+### Step 4: Client Creates Authorization
 
-## Implementation Details
-
-### Server Configuration
-
-<CodeGroup>
-
-```typescript x402 v2
-import { HTTPFacilitatorClient } from "@x402/core/server";
-
-// 1. Query facilitator for treasury address
-const facilitatorClient = new HTTPFacilitatorClient({ 
-  url: "https://facilitator.0xmeta.ai/v1" 
-});
-
-const supported = await facilitatorClient.getSupported();
-const treasuryAddress = supported.signers["eip155:*"][0];
-// ✅ "0x5d791e3554d0e83f171126905bda1640bf6f9a8b"
-
-// 2. Use in middleware
-app.use(paymentMiddleware(
-  {
-    "GET /resource": {
-      accepts: [{
-        scheme: "exact",
-        price: "$0.011",
-        network: "eip155:84532",
-        payTo: treasuryAddress,  // ✅ Treasury, not merchant
-      }]
-    }
-  },
-  facilitatorClient
-));
-```
-
-```typescript x402 v1
-import { paymentMiddleware } from "x402-express";
-
-// 1. Get treasury from /supported
-const response = await fetch("https://facilitator.0xmeta.ai/v1/supported");
-const supported = await response.json();
-const treasuryAddress = supported.signers["eip155:*"][0];
-
-// 2. Use in middleware
-app.use(paymentMiddleware(
-  treasuryAddress,  // ✅ Treasury address
-  {
-    "GET /resource": {
-      price: "$0.011",
-      network: "base-sepolia"
-    }
-  },
-  {
-    url: "https://facilitator.0xmeta.ai/v1"
-  }
-));
-```
-
-```env Environment
-# ✅ CORRECT: Treasury address from /supported
-EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
-
-# Facilitator URL
-FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
-```
-
-</CodeGroup>
-
-### Client Authorization
-
-Client creates authorization to treasury:
+Client signs EIP-3009 authorization to merchant:
 
 ```javascript
 const authorization = {
   from: clientAddress,
-  to: treasuryAddress,      // ✅ Treasury from /supported
-  value: "11000",           // Full amount (merchant + fee)
+  to: merchantAddress,    // ← MERCHANT, not treasury
+  value: "20000",         // $0.02 USDC (6 decimals)
   validAfter: "0",
-  validBefore: String(Math.floor(Date.now() / 1000) + 86400),
+  validBefore: "1735689600",
   nonce: randomNonce(),
-  token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+  token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" // USDC
 };
+
+const signature = await signTypedData(authorization);
 ```
 
-### Settlement Flow
+### Step 5: Facilitator Verification
 
-```javascript
-// 1. Facilitator receives authorization
-POST /v1/verify
-{
-  paymentPayload: {
-    authorization: { to: treasuryAddress, value: "11000", ... },
-    signature: "0x..."
-  },
-  paymentRequirements: {
-    payTo: merchantAddress,  // Merchant address for forwarding
-    amount: "1000"           // Merchant portion only
-  }
-}
+Facilitator validates authorization cryptographically:
 
-// 2. Facilitator executes settlement
-// Step 1: Client → Treasury via transferWithAuthorization
-transferWithAuthorization({
-  from: clientAddress,
-  to: treasuryAddress,
-  value: 11000,  // Full amount
-  ...
-})
+```python
+# Verify signature
+recovered_address = recover_signer(authorization, signature)
+assert recovered_address == authorization['from'], "Invalid signature"
 
-// Step 2: Treasury → Merchant via standard transfer
-transfer({
-  from: treasuryAddress,
-  to: merchantAddress,
-  value: 1000  // Merchant amount only
-})
+# Verify recipient
+assert authorization['to'] == merchant_address, "Must pay to merchant"
 
-// Treasury keeps: 10000 (fee)
+# Verify amount
+assert authorization['value'] == expected_amount, "Amount mismatch"
+
+# Return verification_id
 ```
+
+### Step 6: Fee Collection (Pre-Settlement)
+
+**Before executing customer payment**, facilitator collects fee:
+
+```python
+# Check merchant allowance
+allowance = usdc.allowance(merchant, treasury)
+required = 10000  # $0.01 in wei
+
+if allowance < required:
+    raise InsufficientAllowanceError(
+        f"Merchant must approve {required} wei ($0.01). "
+        f"Run: node approve-facilitator.mjs"
+    )
+
+# Collect fee
+fee_tx = usdc.transferFrom(
+    from_=merchant,
+    to=treasury,
+    value=required
+)
+
+# Wait for confirmation
+receipt = wait_for_transaction(fee_tx)
+assert receipt.status == 1, "Fee collection failed"
+```
+
+**If fee collection fails, settlement is blocked.**
+
+This guarantees the facilitator never provides free service.
+
+### Step 7: Settlement Execution
+
+After fee collected, execute customer → merchant payment:
+
+```python
+# Execute via 1Shot API
+settlement_response = oneshot_api.execute_settlement(
+    authorization=authorization,
+    signature=signature
+)
+
+# Customer → Merchant payment executed on-chain
+# Merchant receives 100% of customer payment
+```
+
+---
+
+## Trust Model
+
+### What Merchants Trust
+
+✅ **Customer payments arrive directly**
+- EIP-3009 authorization cryptographically bound to merchant address
+- Facilitator cannot redirect customer funds
+- 100% of customer payment received
+
+✅ **Fee collection is explicit and controllable**
+- Standard ERC-20 approval (revocable anytime)
+- Exact fee amount known upfront ($0.01)
+- On-chain auditable
+
+✅ **No custody risk**
+- Facilitator never holds customer funds
+- Settlement executes customer → merchant directly
+
+### What Merchants Don't Need to Trust
+
+❌ **Facilitator custody**
+- Never happens (funds go direct to merchant)
+
+❌ **Fee calculation**
+- Flat $0.01, no dynamic pricing or hidden fees
+
+❌ **Arbitrary fund movement**
+- Approval limits what facilitator can collect
 
 ---
 
 ## Security Considerations
 
-### Trust Model
+### Approval Safety
 
-**What merchants trust:**
-- ✅ Treasury will forward payments (enforced by settlement response)
-- ✅ Fee amount is fixed and disclosed
-- ✅ Settlement is atomic (client → treasury → merchant)
+**Merchant controls:**
 
-**What they don't need to trust:**
-- ❌ Treasury spending their USDC (no approval needed)
-- ❌ Custody of funds (payments forwarded immediately)
-- ❌ Complex smart contracts (standard EIP-3009 only)
-
-### Verification
-
-Merchants can verify payments on-chain:
-
-1. **Check settlement response** for `merchant_forward_tx`
-2. **View on block explorer**: 
+1. **Approval amount** - Decide how many settlements to fund
+2. **Revocation** - Can revoke approval anytime via:
+   ```javascript
+   usdc.approve(treasury, 0) // Revoke all access
    ```
-   https://sepolia.basescan.org/tx/{merchant_forward_tx}
+3. **Monitoring** - Check remaining allowance:
+   ```bash
+   node check-allowance.mjs
    ```
-3. **Verify transfer amount** matches expected merchant portion
+
+**Attack scenarios:**
+
+| Scenario | Protection |
+|----------|------------|
+| Facilitator drains entire USDC balance | ❌ Impossible - only approved amount accessible |
+| Facilitator collects more than $0.01 | ❌ Blocked by smart contract (exact amount hardcoded) |
+| Facilitator redirects customer funds | ❌ Impossible - EIP-3009 signature bound to merchant |
+| Merchant has insufficient approval | ✅ Settlement fails, customer not charged |
+
+### Settlement Atomicity
+
+**Pre-settlement fee collection ensures:**
+
+1. Fee collected FIRST
+2. If fee fails → settlement blocked
+3. If settlement fails → fee already collected (payment for attempt)
+
+**Trade-off:** Merchant pays fee even if settlement fails after fee collection.
+
+**Rationale:** Prevents free service exploitation. Merchants can monitor and reduce approval if concerned.
 
 ---
 
-## Common Misconceptions
+## Comparison: Old vs New
+
+| Aspect | Treasury-First (Old) | Post-Settlement (New) |
+|--------|---------------------|---------------------|
+| **Customer payment** | → Treasury → Merchant | → Merchant (direct) ✅ |
+| **Fee collection** | Atomic split | Post-settlement via transferFrom ✅ |
+| **Trust required** | High (custody) | Minimal (approval only) ✅ |
+| **x402 compliant** | ❌ No | ✅ Yes |
+| **Merchant setup** | None | One-time approval |
+| **Revocability** | Not applicable | Standard ERC-20 revoke ✅ |
+
+---
+
+## Implementation Details
+
+### On-Chain Transactions
+
+**Setup (One-Time):**
+```
+Merchant → USDC.approve(treasury, 100 USDC)
+Gas cost: ~50,000 gas (~$0.50 on Base)
+```
+
+**Per Settlement:**
+```
+1. Facilitator → USDC.transferFrom(merchant, treasury, $0.01)
+   Gas: Paid by facilitator
+   
+2. Facilitator → 1Shot.executeSettlement(authorization, signature)
+   Result: Client → Merchant ($0.02)
+   Gas: Paid by 1Shot
+```
+
+**Total merchant gas cost: $0** (after initial approval)
+
+### Error Handling
+
+**Insufficient Allowance:**
+```json
+{
+  "error": {
+    "code": "insufficient_allowance",
+    "message": "Merchant must approve facilitator for USDC spending",
+    "details": {
+      "required": "10000",
+      "available": "0",
+      "approval_command": "node approve-facilitator.mjs"
+    }
+  }
+}
+```
+
+**Fee Collection Failed:**
+```json
+{
+  "error": {
+    "code": "fee_collection_failed",
+    "message": "Could not collect $0.01 fee from merchant",
+    "details": {
+      "reason": "Insufficient USDC balance",
+      "merchant_balance": "0"
+    }
+  }
+}
+```
+
+---
+
+## Alternatives Considered
+
+### 1. Smart Contract Atomic Split
+
+```solidity
+contract AtomicSplit {
+    function splitPayment(
+        address merchant,
+        address treasury,
+        uint256 totalAmount
+    ) external {
+        usdc.transferFrom(msg.sender, merchant, totalAmount - fee);
+        usdc.transferFrom(msg.sender, treasury, fee);
+    }
+}
+```
+
+**Why rejected:**
+- ❌ Requires custom smart contract deployment
+- ❌ Higher gas costs (contract interaction)
+- ❌ Still requires customer to authorize contract (not direct to merchant)
+- ❌ Violates trust-minimization (contract has custody)
+
+### 2. Merchant Voluntary Fee Payment
+
+Merchant manually pays fees after receiving customer payment.
+
+**Why rejected:**
+- ❌ Merchants can skip payment (free service)
+- ❌ No enforcement mechanism
+- ❌ Unsustainable business model
+
+### 3. Treasury-First (Original)
+
+See [discussion above](#comparison-old-vs-new).
+
+**Why rejected:**
+- ❌ Violates x402 trust-minimization
+- ❌ Facilitator custody of customer funds
+- ❌ Rejected by Coinbase x402 ecosystem
+
+---
+
+## Monitoring & Operations
+
+### Check Allowance
+
+Merchants can monitor remaining allowance:
+
+```bash
+node check-allowance.mjs
+
+Output:
+📍 Base Mainnet
+   USDC Balance: 500.00 USDC
+   Fee Allowance: 95.50 USDC
+   Settlements: 9,550
+   ✅ Good
+```
+
+### Top Up Allowance
+
+When allowance runs low:
+
+```bash
+# Approve additional 100 USDC
+node approve-facilitator.mjs
+```
+
+### Revoke Access
+
+To stop allowing settlements:
+
+```bash
+# Set allowance to 0
+APPROVAL_AMOUNT=0 node approve-facilitator.mjs
+```
+
+**Effect:** All future settlements will fail with `insufficient_allowance` error.
+
+---
+
+## Best Practices
 
 <AccordionGroup>
-  <Accordion title="Why can't clients just pay merchants directly?">
-    **Technical impossibility:** EIP-3009 signatures are cryptographically bound to a single recipient. Once signed, the recipient cannot be changed. If clients sign to merchants, facilitators cannot intercept fees without requiring merchant USDC approval (poor UX).
+  <Accordion title="Approve Reasonable Amounts">
+    **Recommended:** 100-1000 USDC (10,000-100,000 settlements)
+    
+    **Avoid:** Infinite approval (max uint256)
+    
+    **Why:** Limits exposure if facilitator compromised
   </Accordion>
 
-  <Accordion title="Is this a centralization risk?">
-    **No:** Treasury forwarding is enforced by settlement responses and verifiable on-chain. Merchants can audit all payments. The treasury is a pass-through, not a custodian. Funds are forwarded in the same atomic settlement transaction.
+  <Accordion title="Monitor Allowance">
+    Set up alerts when allowance drops below threshold:
+    
+    ```javascript
+    const allowance = await checkAllowance();
+    if (allowance.settlements < 100) {
+      alert("Low allowance - top up soon");
+    }
+    ```
   </Accordion>
 
-  <Accordion title="What if treasury doesn't forward payments?">
-    **Settlement fails:** The facilitator settlement response includes `merchant_forward_tx`. If forwarding fails, the entire settlement is marked as failed. Additionally, merchants can verify transfers on-chain before providing resources.
+  <Accordion title="Test on Sepolia First">
+    Always test approval and settlements on Base Sepolia before mainnet:
+    
+    ```bash
+    NETWORK=sepolia node approve-facilitator.mjs
+    ```
   </Accordion>
 
-  <Accordion title="Why not use multi-sig or contracts?">
-    **Complexity vs benefit:** Smart contracts add gas costs, deployment complexity, and security audit requirements without solving the core problem. Treasury-first is the simplest solution that works with standard EIP-3009.
+  <Accordion title="Maintain USDC Balance">
+    Ensure merchant address has USDC for fee payment:
+    
+    - Minimum: 1 USDC (100 settlements)
+    - Recommended: Match approval amount
   </Accordion>
 </AccordionGroup>
 
 ---
 
-## Technical Deep-Dive
+## FAQ
 
-### EIP-3009 Signature Verification
+<AccordionGroup>
+  <Accordion title="Why not collect fee from customer?">
+    **Technical:** EIP-3009 signatures are bound to exact recipient and amount. Can't split payment atomically.
+    
+    **Principle:** x402 requires customer pays merchant directly (trust-minimization).
+    
+    **Solution:** Merchant pays facilitator fee separately (standard approval pattern).
+  </Accordion>
 
-The signature covers all parameters using EIP-712:
+  <Accordion title="What if I revoke approval mid-settlement?">
+    Settlement will fail with `insufficient_allowance` error. Customer won't be charged.
+  </Accordion>
 
-```solidity
-bytes32 structHash = keccak256(
-    abi.encode(
-        TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
-        from,        // ✅ Signer
-        to,          // ❌ Cannot change after signing
-        value,       // ❌ Cannot change after signing
-        validAfter,
-        validBefore,
-        nonce
-    )
-);
+  <Accordion title="Can facilitator drain my USDC balance?">
+    **No.** Facilitator can only access approved amount. Approve 100 USDC → max loss is 100 USDC.
+  </Accordion>
 
-bytes32 digest = keccak256(
-    abi.encodePacked("\x19\x01", domainSeparator, structHash)
-);
+  <Accordion title="What if settlement fails after fee collected?">
+    You paid $0.01 for the settlement attempt. Facilitator keeps fee (payment for service rendered).
+    
+    **Why:** Prevents free service exploitation via intentional settlement failures.
+  </Accordion>
 
-address signer = ecrecover(digest, v, r, s);
-require(signer == from, "Invalid signature");
-```
-
-**Key insight:** `to` and `value` are inside the signed hash. Changing either invalidates the signature.
-
-### Why Splitting Doesn't Work
-
-```javascript
-// What we want (impossible):
-Client signs: {
-  to: merchantAddress,
-  value: 11000
-}
-
-// Split into two transfers:
-Transfer 1: { to: merchantAddress, value: 1000 }   // ❌ Signature invalid
-Transfer 2: { to: treasuryAddress, value: 10000 }  // ❌ Signature invalid
-
-// Why: Original signature covered merchantAddress + 11000
-// New transfers have different parameters → signature verification fails
-```
-
-**Treasury-first solves this:**
-```javascript
-// Client signs (valid):
-{
-  to: treasuryAddress,
-  value: 11000  // ✅ Matches signature
-}
-
-// After settlement, treasury uses separate transfer (no signature needed):
-transfer({
-  from: treasuryAddress,
-  to: merchantAddress,
-  value: 1000
-})
-```
+  <Accordion title="How is this different from Stripe?">
+    **Stripe:** Holds customer funds, takes 2.9% + $0.30 (custody model)
+    
+    **0xmeta:** Direct customer → merchant, $0.01 fee via approval (trust-minimized)
+  </Accordion>
+</AccordionGroup>
 
 ---
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Quick Start" icon="rocket" href="/quickstart">
-    Get started with treasury-first flow
+  <Card title="Approve Facilitator" icon="check" href="/guides/getting-started#step-1-approve-facilitator">
+    Set up one-time USDC approval
   </Card>
   
-  <Card title="x402 Integration" icon="plug" href="/x402-integration">
-    Complete integration guide
+  <Card title="Server Integration" icon="code" href="/integration/nodejs">
+    Add x402 middleware to your app
   </Card>
   
-  <Card title="API Reference" icon="book" href="/api-reference/introduction">
-    Explore verify and settle endpoints
+  <Card title="Test Settlement" icon="flask" href="/guides/getting-started#step-3-test-payment">
+    Complete end-to-end payment flow
   </Card>
   
-  <Card title="FAQ" icon="question" href="/faq">
-    Common questions answered
+  <Card title="Monitor Allowance" icon="chart-line" href="#monitoring--operations">
+    Track remaining settlements
   </Card>
 </CardGroup>
 
-<Info>
-**Key takeaway:** Treasury-first isn't a design preference—it's the only viable solution to EIP-3009's cryptographic constraints while maintaining atomic fee collection and excellent merchant UX.
-</Info>
+<Check>
+**Trust-Minimized:** Customer funds go DIRECTLY to merchants. Facilitator collects fee separately via standard ERC-20 approval. No custody, no redirection, fully auditable.
+</Check>

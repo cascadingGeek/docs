@@ -3,26 +3,91 @@ title: "x402 Integration Guide"
 description: "Complete guide for integrating x402 v1 and v2 with 0xmeta facilitator"
 ---
 
-## Overview
+## Overview 
 
-0xmeta supports both **x402 v1** (legacy) and **x402 v2** (current) protocols. This guide shows you how to integrate with either version.
+0xmeta supports both **x402 v1** (legacy) and **x402 v2** (current) protocols with **post-settlement fee collection** to maintain trust-minimization.
 
 <Note>
-**Recommended:** Use x402 v2 for new projects. It provides better network identification with CAIP-2 format and improved extensibility.
+**Trust-Minimized:** Customer payments go DIRECTLY to your address. The $0.01 fee is collected separately from your pre-approved USDC balance.
 </Note>
 
 ---
 
-## Key Differences: v1 vs v2
+## Quick Start
 
-| Feature | x402 v1 | x402 v2 |
-|---------|---------|---------|
-| **Network Format** | `"base-sepolia"` | `"eip155:84532"` (CAIP-2) |
-| **SDK Package** | `x402-express` | `@x402/express` |
-| **Status** | Legacy (supported) | Current (recommended) |
-| **Configuration** | Simple string network | Structured CAIP-2 network |
+### Prerequisites
 
-Both versions work with 0xmeta facilitator!
+1. **Merchant wallet** with USDC on Base
+2. **Approve facilitator** for USDC spending (one-time setup)
+3. **x402 express middleware** installed
+
+### Three-Step Setup
+
+<Steps>
+  <Step title="Approve Facilitator">
+    ```bash
+    # One-time setup
+    EVM_PRIVATE_KEY=0x... node approve-facilitator.mjs
+    ```
+    
+    Approves facilitator treasury to collect $0.01 fees from your USDC balance.
+  </Step>
+  
+  <Step title="Configure Server">
+    ```typescript
+    // Use YOUR address in payTo (not treasury)
+    {
+      "GET /resource": {
+        accepts: [{
+          price: "$0.02",
+          payTo: "0xYOUR_MERCHANT_ADDRESS" // ← Your address
+        }]
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Start Accepting Payments">
+    ```bash
+    npm start
+    ```
+    
+    Customers pay directly to your address. Facilitator collects fee from your approved balance.
+  </Step>
+</Steps>
+
+---
+
+## Payment Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Merchant
+    participant Facilitator
+
+    Note over Merchant: ONE-TIME SETUP
+    Merchant->>Facilitator: approve(treasury, 100 USDC)
+    
+    Client->>Merchant: 1. GET /resource
+    Merchant-->>Client: 2. 402 Payment Required<br/>payTo: merchant_address
+    
+    Client->>Client: 3. Sign authorization<br/>to: merchant_address
+    
+    Client->>Facilitator: 4. Verify + Settle
+    
+    Facilitator->>Facilitator: 5. Collect $0.01 fee<br/>from merchant
+    
+    Facilitator->>Merchant: 6. Execute settlement<br/>client → merchant
+    
+    Merchant-->>Client: 7. 200 OK + Resource
+```
+
+**Key Points:**
+- ✅ Client pays DIRECTLY to merchant ($0.02)
+- ✅ Merchant receives 100% of customer payment
+- ✅ Facilitator collects $0.01 fee from merchant's pre-approved balance
+- ✅ No facilitator custody of customer funds
 
 ---
 
@@ -34,7 +99,7 @@ Both versions work with 0xmeta facilitator!
 npm install @x402/express @x402/evm @x402/core
 ```
 
-### Complete Server Setup
+### Complete Server Example
 
 <CodeGroup>
 
@@ -47,12 +112,10 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 
 config();
 
-// ✅ Get treasury address from facilitator's /supported endpoint
 const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
 
 if (!evmAddress) {
   console.error("Missing EVM_ADDRESS environment variable");
-  console.error("Get it from: curl https://facilitator.0xmeta.ai/v1/supported");
   process.exit(1);
 }
 
@@ -69,118 +132,50 @@ const app = express();
 app.use(
   paymentMiddleware(
     {
-      // Define protected resources
       "GET /weather": {
         accepts: [
           {
             scheme: "exact",
-            price: "$0.011",                    // Your price + facilitator fee
-            network: "eip155:84532",            // CAIP-2 format (Base Sepolia)
-            payTo: evmAddress,                  // Treasury address
+            price: "$0.02",                // Your price: $0.01 resource + $0.01 fee
+            network: "eip155:8453",         // Base Mainnet
+            payTo: evmAddress,              // ✅ YOUR merchant address
           },
         ],
         description: "Weather data",
         mimeType: "application/json",
       },
-      
-      "GET /premium/data": {
-        accepts: [
-          {
-            scheme: "exact",
-            price: "$0.021",                    // Different price point
-            network: "eip155:84532",
-            payTo: evmAddress,
-          },
-        ],
-        description: "Premium analytics",
-        mimeType: "application/json",
-      },
     },
-    // Configure facilitator client
     new x402ResourceServer(facilitatorClient)
-      .register("eip155:84532", new ExactEvmScheme()),
+      .register("eip155:8453", new ExactEvmScheme()),
   ),
 );
 
-// Protected route handlers
 app.get("/weather", (req, res) => {
   res.send({
     report: {
       weather: "sunny",
       temperature: 70,
-      timestamp: new Date().toISOString(),
-    },
-  });
-});
-
-app.get("/premium/data", (req, res) => {
-  res.send({
-    analytics: {
-      metric: "premium_data",
-      value: 42,
     },
   });
 });
 
 app.listen(4021, () => {
   console.log(`🚀 Server listening at http://localhost:4021`);
-  console.log(`📍 Protected resources:`);
-  console.log(`   - GET /weather ($0.011)`);
-  console.log(`   - GET /premium/data ($0.021)`);
 });
 ```
 
 ```env .env
-# ✅ CRITICAL: Use treasury address, NOT your merchant address
-# Get from: curl https://facilitator.0xmeta.ai/v1/supported
-EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+# ✅ YOUR merchant address (receives customer payments)
+EVM_ADDRESS=0xA821f428Ef8cC9f54A9915336A82220853059090
+
+# ✅ Private key (for one-time approval setup only)
+EVM_PRIVATE_KEY=0x...
 
 # Facilitator endpoint
 FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
 ```
 
-```json package.json
-{
-  "name": "x402-server",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "start": "tsx server.ts",
-    "dev": "tsx watch server.ts"
-  },
-  "dependencies": {
-    "@x402/express": "latest",
-    "@x402/evm": "latest",
-    "@x402/core": "latest",
-    "express": "^4.18.0",
-    "dotenv": "^16.0.0"
-  },
-  "devDependencies": {
-    "tsx": "latest",
-    "@types/express": "latest"
-  }
-}
-```
-
 </CodeGroup>
-
-### Running the Server
-
-```bash
-# Install dependencies
-npm install
-
-# Start server
-npm start
-```
-
-**Expected output:**
-```
-🚀 Server listening at http://localhost:4021
-📍 Protected resources:
-   - GET /weather ($0.011)
-   - GET /premium/data ($0.021)
-```
 
 ---
 
@@ -192,7 +187,7 @@ npm start
 npm install x402-express
 ```
 
-### Complete Server Setup
+### Complete Server Example
 
 <CodeGroup>
 
@@ -203,7 +198,6 @@ import { paymentMiddleware, Resource, type SolanaAddress } from "x402-express";
 
 config(); 
 
-// ✅ Treasury address from /supported endpoint
 const facilitatorUrl = process.env.FACILITATOR_URL as Resource;
 const payTo = process.env.EVM_ADDRESS as `0x${string}` | SolanaAddress;
 
@@ -216,20 +210,18 @@ const app = express();
 
 app.use(
   paymentMiddleware(
-    payTo,  // Treasury address (first parameter in v1)
+    payTo,  // ✅ YOUR merchant address
     {
-      // Protected resources
       "GET /weather": {
-        price: "$0.011",            // USDC amount in dollars
-        network: "base-sepolia",     // Network name (v1 format)
+        price: "$0.02",          // $0.01 resource + $0.01 fee
+        network: "base",         // Base Mainnet
       },
-      
       "/premium/*": {
-        // Can also define atomic amounts
+        // Or define atomic amounts
         price: {
-          amount: "100000",
+          amount: "20000",       // 0.02 USDC (6 decimals)
           asset: {
-            address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
             decimals: 6,
             eip712: {
               name: "USDC",
@@ -237,11 +229,10 @@ app.use(
             },
           },
         },
-        network: "base-sepolia",
+        network: "base",
       },
     },
     {
-      // Facilitator config
       url: facilitatorUrl,
     },
   ),
@@ -268,414 +259,418 @@ app.listen(4021, () => {
 ```
 
 ```env .env
-EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
+# ✅ YOUR merchant address
+EVM_ADDRESS=0xA821f428Ef8cC9f54A9915336A82220853059090
+
+# ✅ Private key (one-time approval setup)
+EVM_PRIVATE_KEY=0x...
+
+# Facilitator URL
 FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+
+# Network
+NETWORK=base
 ```
 
 </CodeGroup>
 
 ---
 
-## Network Mappings
+## Merchant Approval Setup
 
-### v1 → v2 Network Conversion
+### Why Approval Is Required
 
-| x402 v1 | x402 v2 | Chain ID |
-|---------|---------|----------|
-| `"base-sepolia"` | `"eip155:84532"` | 84532 |
-| `"base"` | `"eip155:8453"` | 8453 |
+The facilitator collects a $0.01 fee per settlement from your USDC balance via `transferFrom`. This requires one-time approval.
 
-### CAIP-2 Format (v2)
+**Technical details:**
+```solidity
+// You approve facilitator treasury
+USDC.approve(treasury, 100 * 10^6); // 100 USDC
 
-CAIP-2 format: `{namespace}:{reference}`
-
-Examples:
-- `eip155:84532` - Base Sepolia
-- `eip155:8453` - Base Mainnet
-- `eip155:1` - Ethereum Mainnet
-
----
-
-## Treasury-First Architecture
-
-### Why Treasury Address?
-
-<AccordionGroup>
-  <Accordion title="Technical Requirement">
-    EIP-3009 `transferWithAuthorization` signatures are cryptographically bound to a specific recipient. They cannot be split or modified after signing.
-    
-    **Problem:** If client authorizes to merchant, facilitator cannot collect fees.
-    
-    **Solution:** Client authorizes to treasury → Treasury forwards to merchant.
-  </Accordion>
-
-  <Accordion title="Discovery via /supported">
-    Get the treasury address programmatically:
-    
-    ```bash
-    curl https://facilitator.0xmeta.ai/v1/supported
-    ```
-    
-    ```json
-    {
-      "signers": {
-        "eip155:*": ["0x5d791e3554d0e83f171126905bda1640bf6f9a8b"]
-      }
-    }
-    ```
-    
-    ✅ Use `signers["eip155:*"][0]` as your `EVM_ADDRESS`
-  </Accordion>
-
-  <Accordion title="Automatic Forwarding">
-    After receiving payment, treasury automatically forwards merchant portion:
-    
-    ```
-    Client pays: $0.011 USDC
-    Treasury keeps: $0.01 USDC (fee)
-    Merchant receives: $0.001 USDC (automatic)
-    ```
-  </Accordion>
-</AccordionGroup>
-
----
-
-## Testing Your Integration
-
-### 1. Start Server
-
-```bash
-npm start
+// Facilitator collects fee before settlement
+USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
 ```
 
-### 2. Test with x402 Client
+### approve-facilitator.mjs
 
 <CodeGroup>
 
-```bash cURL
-# Request protected resource
-curl http://localhost:4021/weather
-```
+```javascript approve-facilitator.mjs
+import { ethers } from "ethers";
+import dotenv from "dotenv";
+dotenv.config();
 
-```typescript client.ts
-import { config } from "dotenv";
-import { x402Client, wrapAxiosWithPayment, x402HTTPClient } from "@x402/axios";
-import { registerExactEvmScheme } from "@x402/evm/exact/client";
-import { privateKeyToAccount } from "viem/accounts";
-import axios from "axios";
+const NETWORKS = {
+  sepolia: {
+    name: "Base Sepolia",
+    rpc: "https://sepolia.base.org",
+    chainId: 84532,
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  },
+  mainnet: {
+    name: "Base Mainnet",
+    rpc: "https://mainnet.base.org",
+    chainId: 8453,
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  },
+};
 
-config();
+const OXMETA_TREASURY = "0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B";
 
-const evmPrivateKey = process.env.EVM_PRIVATE_KEY as `0x${string}`;
-const baseURL = process.env.RESOURCE_SERVER_URL || "http://localhost:4021";
-const endpointPath = process.env.ENDPOINT_PATH || "/weather";
-const url = `${baseURL}${endpointPath}`;
+const USDC_ABI = [
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+];
 
-async function main(): Promise<void> {
-  const evmSigner = privateKeyToAccount(evmPrivateKey);
-
-  const client = new x402Client();
-  registerExactEvmScheme(client, { signer: evmSigner });
-
-  const api = wrapAxiosWithPayment(axios.create(), client);
-
-  console.log(`Making request to: ${url}\n`);
-  const response = await api.get(url);
-  const body = response.data;
-  console.log("Response body:", body);
-
-  if (response.status < 400) {
-    const paymentResponse = new x402HTTPClient(client).getPaymentSettleResponse(
-      name => response.headers[name.toLowerCase()],
-    );
-    console.log("\nPayment response:", paymentResponse);
+async function approveFacilitator() {
+  const networkKey = process.env.NETWORK || "sepolia";
+  const network = NETWORKS[networkKey];
+  
+  const privateKey = process.env.EVM_PRIVATE_KEY;
+  if (!privateKey) {
+    console.error("❌ EVM_PRIVATE_KEY required in .env");
+    process.exit(1);
   }
+  
+  const provider = new ethers.JsonRpcProvider(network.rpc);
+  const merchant = new ethers.Wallet(privateKey, provider);
+  
+  console.log(`\n📍 ${network.name}`);
+  console.log(`   Merchant: ${merchant.address}`);
+  console.log(`   Treasury: ${OXMETA_TREASURY}`);
+  
+  const usdc = new ethers.Contract(network.usdc, USDC_ABI, merchant);
+  
+  // Approve 100 USDC (10,000 settlements)
+  const approvalAmount = ethers.parseUnits("100", 6);
+  
+  console.log(`\n💰 Approving 100 USDC for fee collection...`);
+  
+  const tx = await usdc.approve(OXMETA_TREASURY, approvalAmount);
+  console.log(`   Transaction: ${tx.hash}`);
+  
+  await tx.wait();
+  console.log(`✅ Approval successful!`);
+  
+  // Verify
+  const allowance = await usdc.allowance(merchant.address, OXMETA_TREASURY);
+  console.log(`   Allowance: ${ethers.formatUnits(allowance, 6)} USDC`);
+  console.log(`   Settlements: ~${Math.floor(Number(ethers.formatUnits(allowance, 6)) / 0.01)}`);
 }
 
-main().catch(error => {
-  console.error(error?.response?.data?.error ?? error);
-  process.exit(1);
-});
+approveFacilitator().catch(console.error);
+```
+
+```bash Usage
+# Approve on Base Sepolia (testnet)
+NETWORK=sepolia node approve-facilitator.mjs
+
+# Approve on Base Mainnet (production)
+NETWORK=mainnet node approve-facilitator.mjs
 ```
 
 </CodeGroup>
 
-### Expected Flow
-
+**Expected Output:**
 ```
-1. ✅ Client requests /weather
-2. ✅ Server returns 402 Payment Required
-   Headers: payTo = 0x5d79... (treasury)
-3. ✅ Client creates EIP-3009 authorization
-   to: 0x5d79... (treasury)
-   value: $0.011
-4. ✅ Client sends authorization to server
-5. ✅ Server forwards to facilitator
-6. ✅ Facilitator verifies authorization
-7. ✅ Facilitator settles payment
-   a. Client → Treasury ($0.011)
-   b. Treasury → Merchant ($0.001, automatic)
-   c. Treasury keeps fee ($0.01)
-8. ✅ Server returns 200 OK + weather data
+📍 Base Sepolia
+   Merchant: 0xA821f428Ef8cC9f54A9915336A82220853059090
+   Treasury: 0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B
+
+💰 Approving 100 USDC for fee collection...
+   Transaction: 0x123...
+✅ Approval successful!
+   Allowance: 100.0 USDC
+   Settlements: ~10000
 ```
 
 ---
 
-## Production Deployment
+## Monitoring Allowance
 
-### Environment Variables
+### check-allowance.mjs
 
-```env
-# Production config
-EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b
-FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
-NODE_ENV=production
-PORT=4021
+<CodeGroup>
+
+```javascript check-allowance.mjs
+import { ethers } from "ethers";
+import dotenv from "dotenv";
+dotenv.config();
+
+const NETWORKS = {
+  sepolia: {
+    name: "Base Sepolia",
+    rpc: "https://sepolia.base.org",
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  },
+  mainnet: {
+    name: "Base Mainnet",
+    rpc: "https://mainnet.base.org",
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  },
+};
+
+const OXMETA_TREASURY = "0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B";
+
+const USDC_ABI = [
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function balanceOf(address account) external view returns (uint256)",
+];
+
+async function checkNetwork(networkKey, merchantAddress) {
+  const network = NETWORKS[networkKey];
+  const provider = new ethers.JsonRpcProvider(network.rpc);
+  const usdc = new ethers.Contract(network.usdc, USDC_ABI, provider);
+  
+  const [allowance, balance] = await Promise.all([
+    usdc.allowance(merchantAddress, OXMETA_TREASURY),
+    usdc.balanceOf(merchantAddress),
+  ]);
+  
+  const allowanceFormatted = ethers.formatUnits(allowance, 6);
+  const balanceFormatted = ethers.formatUnits(balance, 6);
+  const settlements = Math.floor(Number(allowanceFormatted) / 0.01);
+  
+  console.log(`\n📍 ${network.name}`);
+  console.log(`   USDC Balance: ${balanceFormatted} USDC`);
+  console.log(`   Fee Allowance: ${allowanceFormatted} USDC`);
+  console.log(`   Settlements Remaining: ${settlements}`);
+  
+  if (settlements < 10) {
+    console.log(`   ⚠️  Low - run: NETWORK=${networkKey} node approve-facilitator.mjs`);
+  } else if (settlements < 50) {
+    console.log(`   ⚠️  Getting low`);
+  } else {
+    console.log(`   ✅ Good`);
+  }
+}
+
+async function main() {
+  const merchantAddress = process.env.EVM_ADDRESS;
+  
+  if (!merchantAddress) {
+    console.error("❌ Set EVM_ADDRESS in .env");
+    process.exit(1);
+  }
+  
+  console.log("=".repeat(60));
+  console.log("0xmeta Facilitator Fee Allowance Check");
+  console.log("=".repeat(60));
+  console.log(`\n👤 Merchant: ${merchantAddress}`);
+  console.log(`🏦 Treasury: ${OXMETA_TREASURY}`);
+  
+  const networkArg = process.argv[2] || "both";
+  
+  if (networkArg === "both") {
+    await checkNetwork("sepolia", merchantAddress);
+    await checkNetwork("mainnet", merchantAddress);
+  } else {
+    await checkNetwork(networkArg, merchantAddress);
+  }
+  
+  console.log("\n" + "=".repeat(60));
+}
+
+main().catch(console.error);
 ```
 
-### Network Selection
+```bash Usage
+# Check both networks
+node check-allowance.mjs
 
-**For production:**
-- v2: Use `"eip155:8453"` (Base Mainnet)
-- v1: Use `"base"` (Base Mainnet)
+# Check specific network
+node check-allowance.mjs sepolia
+node check-allowance.mjs mainnet
+```
 
-**For testing:**
-- v2: Use `"eip155:84532"` (Base Sepolia)
-- v1: Use `"base-sepolia"` (Base Sepolia)
+</CodeGroup>
 
-### Checklist
+**Expected Output:**
+```
+============================================================
+0xmeta Facilitator Fee Allowance Check
+============================================================
 
-<Steps>
-  <Step title="Verify Treasury Address">
-    ```bash
-    curl https://facilitator.0xmeta.ai/v1/supported
-    ```
-    Confirm `signers["eip155:*"][0]` matches your `EVM_ADDRESS`
-  </Step>
-  
-  <Step title="Test on Sepolia">
-    - Use Base Sepolia testnet
-    - Get testnet USDC from Circle faucet
-    - Verify payments work end-to-end
-  </Step>
-  
-  <Step title="Switch to Mainnet">
-    - Update network to `eip155:8453` (v2) or `base` (v1)
-    - Use real USDC
-    - Monitor first few settlements closely
-  </Step>
-  
-  <Step title="Monitor Settlements">
-    Check settlement responses for:
-    - `merchant_forward_tx` - Forwarding transaction hash
-    - `merchant_forwarded: true` - Confirmation of automatic forward
-  </Step>
-</Steps>
+👤 Merchant: 0xA821f428Ef8cC9f54A9915336A82220853059090
+🏦 Treasury: 0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B
+
+📍 Base Sepolia
+   USDC Balance: 500.00 USDC
+   Fee Allowance: 95.50 USDC
+   Settlements Remaining: 9550
+   ✅ Good
+
+📍 Base Mainnet
+   USDC Balance: 1000.00 USDC
+   Fee Allowance: 0.00 USDC
+   Settlements Remaining: 0
+   ⚠️  Low - run: NETWORK=mainnet node approve-facilitator.mjs
+
+============================================================
+```
 
 ---
 
-## Common Issues
+## Network Configuration
+
+### Base Sepolia (Testnet)
+
+| Resource | Value |
+|----------|-------|
+| **Chain ID** | `84532` |
+| **CAIP-2** | `eip155:84532` |
+| **USDC** | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| **Treasury** | `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B` |
+| **RPC** | `https://sepolia.base.org` |
+
+### Base Mainnet (Production)
+
+| Resource | Value |
+|----------|-------|
+| **Chain ID** | `8453` |
+| **CAIP-2** | `eip155:8453` |
+| **USDC** | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| **Treasury** | `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B` |
+| **RPC** | `https://mainnet.base.org` |
+
+---
+
+## Error Handling
+
+### Insufficient Allowance
+
+If merchant hasn't approved facilitator:
+
+```json
+{
+  "error": {
+    "code": "insufficient_allowance",
+    "message": "Merchant must approve facilitator for USDC spending",
+    "details": {
+      "required": "10000",
+      "available": "0",
+      "approval_command": "node approve-facilitator.mjs"
+    }
+  }
+}
+```
+
+**Solution:**
+```bash
+EVM_PRIVATE_KEY=0x... node approve-facilitator.mjs
+```
+
+### Fee Collection Failed
+
+If merchant has insufficient USDC balance:
+
+```json
+{
+  "error": {
+    "code": "fee_collection_failed",
+    "message": "Could not collect $0.01 fee from merchant",
+    "details": {
+      "reason": "Insufficient USDC balance"
+    }
+  }
+}
+```
+
+**Solution:** Add USDC to merchant address.
+
+---
+
+## Best Practices
 
 <AccordionGroup>
-  <Accordion title="Error: Payment must be to treasury, not merchant">
-    **Cause:** Server is configured with merchant address instead of treasury
+  <Accordion title="Approve Reasonable Amounts">
+    **Recommended:** 100-1000 USDC (10,000-100,000 settlements)
     
-    **Solution:**
+    **Avoid:** Infinite approval (max uint256)
+    
+    **Why:** Limits exposure if facilitator compromised
+  </Accordion>
+
+  <Accordion title="Monitor Allowance Regularly">
+    Set up automated checks:
+    
     ```bash
-    # Get correct treasury address
-    curl https://facilitator.0xmeta.ai/v1/supported
-    
-    # Update .env
-    EVM_ADDRESS=0x5d791e3554d0e83f171126905bda1640bf6f9a8b  # Treasury
+    # Cron job to check daily
+    0 9 * * * node check-allowance.mjs
     ```
   </Accordion>
 
-  <Accordion title="Client authorizes to wrong address">
-    **Cause:** Middleware returning merchant address in 402 response
+  <Accordion title="Test on Sepolia First">
+    Always test on testnet before mainnet:
     
-    **Solution:** Ensure `payTo` in middleware config is treasury address
+    ```bash
+    # 1. Approve on Sepolia
+    NETWORK=sepolia node approve-facilitator.mjs
     
-    ```typescript
-    paymentMiddleware(
-      {
-        "GET /resource": {
-          accepts: [{
-            payTo: "0x5d79...",  // ✅ Treasury, not merchant
-          }]
-        }
-      }
-    )
+    # 2. Test settlements
+    npm run test
+    
+    # 3. Then approve on mainnet
+    NETWORK=mainnet node approve-facilitator.mjs
     ```
   </Accordion>
 
-  <Accordion title="Settlement fails: authorization expired">
-    **Cause:** Client's `validBefore` timestamp too short
+  <Accordion title="Maintain USDC Balance">
+    Ensure sufficient USDC for fees:
     
-    **Solution:** Client should set longer validity:
-    ```javascript
-    validBefore: String(Math.floor(Date.now() / 1000) + 86400)  // 24 hours
-    ```
+    - Minimum: 1 USDC (100 settlements)
+    - Recommended: Match approval amount
   </Accordion>
 </AccordionGroup>
 
 ---
 
-## Pricing Configuration
+## FAQ
 
-### Setting Your Price
+<AccordionGroup>
+  <Accordion title="Why do I need to approve the facilitator?">
+    The facilitator collects a $0.01 fee per settlement from your USDC balance via `transferFrom`. This is a standard ERC-20 pattern that requires approval.
+  </Accordion>
 
-```typescript
-// v2
-accepts: [{
-  price: "$0.011",  // Your price + $0.01 facilitator fee
-}]
+  <Accordion title="Can the facilitator access all my USDC?">
+    **No.** Only the approved amount is accessible. Approve 100 USDC → max risk is 100 USDC.
+  </Accordion>
 
-// v1
-price: "$0.011"
-```
+  <Accordion title="What if I revoke approval?">
+    Future settlements will fail with `insufficient_allowance` error. Customers won't be charged.
+  </Accordion>
 
-**Example Pricing:**
-- Merchant wants: $0.001
-- Facilitator fee: $0.01
-- **Total price:** `"$0.011"`
+  <Accordion title="Why not collect fee from customer?">
+    x402 requires customer payments go directly to merchants (trust-minimization). We can't split customer payments, so merchants pay the fee separately.
+  </Accordion>
 
-### Multiple Price Points
-
-```typescript
-// v2
-{
-  "GET /basic": {
-    accepts: [{ price: "$0.011" }]  // $0.001 + $0.01 fee
-  },
-  "GET /premium": {
-    accepts: [{ price: "$0.101" }]  // $0.091 + $0.01 fee
-  }
-}
-```
-
----
-
-## Monitoring
-
-### Check Settlement Status
-
-Settlement responses include forwarding information:
-
-```json
-{
-  "settlement_id": "stl_xyz",
-  "status": "settled",
-  "details": {
-    "merchant_forward_tx": "0x123...",
-    "merchant_forwarded": true,
-    "merchant_amount": "1000",
-    "facilitator_fee": "10000"
-  }
-}
-```
-
-### Verify on Block Explorer
-
-**Base Sepolia:**
-```
-https://sepolia.basescan.org/tx/{merchant_forward_tx}
-```
-
-**Base Mainnet:**
-```
-https://basescan.org/tx/{merchant_forward_tx}
-```
-
----
-
-## Migration: v1 → v2
-
-### Step 1: Update Dependencies
-
-```bash
-npm uninstall x402-express
-npm install @x402/express @x402/evm @x402/core
-```
-
-### Step 2: Update Imports
-
-```typescript
-// Before (v1)
-import { paymentMiddleware, Resource } from "x402-express";
-
-// After (v2)
-import { paymentMiddleware, x402ResourceServer } from "@x402/express";
-import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { HTTPFacilitatorClient } from "@x402/core/server";
-```
-
-### Step 3: Update Middleware Config
-
-```typescript
-// Before (v1)
-app.use(
-  paymentMiddleware(
-    payTo,
-    {
-      "GET /weather": {
-        price: "$0.011",
-        network: "base-sepolia",
-      },
-    },
-    { url: facilitatorUrl },
-  ),
-);
-
-// After (v2)
-const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
-
-app.use(
-  paymentMiddleware(
-    {
-      "GET /weather": {
-        accepts: [{
-          scheme: "exact",
-          price: "$0.011",
-          network: "eip155:84532",  // CAIP-2 format
-          payTo: evmAddress,
-        }],
-      },
-    },
-    new x402ResourceServer(facilitatorClient)
-      .register("eip155:84532", new ExactEvmScheme()),
-  ),
-);
-```
-
-### Step 4: Update Network Identifiers
-
-| v1 | v2 |
-|----|-----|
-| `"base-sepolia"` | `"eip155:84532"` |
-| `"base"` | `"eip155:8453"` |
+  <Accordion title="What happens if settlement fails after fee?">
+    You paid $0.01 for the settlement attempt. This prevents free service exploitation.
+  </Accordion>
+</AccordionGroup>
 
 ---
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="API Reference" icon="book" href="/api-reference/introduction">
-    Explore verify and settle endpoints
-  </Card>
-  
-  <Card title="Pricing Guide" icon="dollar-sign" href="/pricing">
-    Understand fee structure
-  </Card>
-  
   <Card title="Architecture" icon="diagram-project" href="/architecture">
-    Learn system design
+    Understand payment flow
   </Card>
   
-  <Card title="Error Handling" icon="triangle-exclamation" href="/api-reference/errors">
-    Handle errors properly
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore endpoints
+  </Card>
+  
+  <Card title="Pricing" icon="dollar-sign" href="/pricing">
+    Fee structure details
+  </Card>
+  
+  <Card title="FAQ" icon="question" href="/faq">
+    Common questions
   </Card>
 </CardGroup>
 
 <Check>
-**Integration complete!** Your server is now accepting x402 payments with treasury-first architecture.
+**You're ready!** Approve the facilitator, configure your server with YOUR merchant address, and start accepting payments.
 </Check>

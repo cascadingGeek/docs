@@ -6,93 +6,72 @@ description: "Verify an EIP-3009 payment authorization"
 
 ## Endpoint
 
-Verify that an EIP-3009 transferWithAuthorization signature is valid and meets expected criteria.
+Verify that an EIP-3009 `transferWithAuthorization` signature is valid and meets expected criteria.
 
-<ParamField path="transaction_hash" type="string" required>
-  The nonce from the EIP-3009 authorization (used as transaction reference)
-  Example: `0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9`
-</ParamField>
+**Key principle:** Customer authorizes payment to **merchant address** (not facilitator).
 
-<ParamField path="chain" type="string" required>
-  Blockchain network: `base` or `base-sepolia`
-</ParamField>
+<Note>
+Verification is **FREE**. Only successful settlements incur the $0.01 fee.
+</Note>
 
-<ParamField path="seller_address" type="string" required>
-  The merchant's receiving address (42 characters, must start with 0x) Example:
-  `0xa821f428ef8cc9f54a9915336a82220853059090`
-</ParamField>
+---
 
-<ParamField path="expected_amount" type="string" required>
-  Expected payment amount in token's smallest unit (string to avoid precision
-  loss) Example: `"10000"` (0.01 USDC with 6 decimals)
-</ParamField>
+## Request Parameters
 
-<ParamField path="expected_token" type="string" required>
-  Token contract address for the payment Example:
-  `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (USDC on Base Sepolia)
-</ParamField>
-
-<ParamField path="metadata" type="object" required>
-  Payment metadata including the EIP-3009 authorization
+<ParamField path="payment" type="object" required>
+  Payment payload containing EIP-3009 authorization and signature
   
-  ```json
-  {
-    "source": "your_app_name",
-    "resource": "https://your-app.com/resource",
-    "paymentPayload": {
-      "x402Version": 1,
-      "scheme": "exact",
-      "network": "base-sepolia",
-      "payload": {
-        "authorization": {
-          "from": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480",
-          "to": "0xa821f428ef8cc9f54a9915336a82220853059090",
-          "value": "10000",
-          "validAfter": "0",
-          "validBefore": "1735689600",
-          "nonce": "0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9",
-          "token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
-        },
-        "signature": "0x1e112204abec0856f56559b2d9a58d4e7bb5daec..."
-      }
-    },
-    "payer": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480"
-  }
-  ```
+  **payment.payload.authorization:**
+  - `from`: Customer address
+  - `to`: **MERCHANT address** (where customer payment goes)
+  - `value`: Payment amount in token's smallest unit
+  - `validAfter`: Unix timestamp (usually "0")
+  - `validBefore`: Unix timestamp (expiry)
+  - `nonce`: Unique random bytes32
+  
+  **payment.payload.signature:** EIP-712 signature from customer
 </ParamField>
 
-<RequestExample>
+<ParamField path="requirements" type="object" required>
+  Payment requirements from merchant's 402 response
+  
+  - `scheme`: "exact"
+  - `price`: "$0.02" (or atomic amount)
+  - `network`: "eip155:84532" (CAIP-2 format)
+  - `payTo`: **Merchant address**
+  - `token`: USDC address (optional if using price)
+</ParamField>
+
+---
+
+## Request Examples
+
+<CodeGroup>
 
 ```bash cURL
 curl -X POST https://facilitator.0xmeta.ai/v1/verify \
   -H "Content-Type: application/json" \
   -d '{
-    "transaction_hash": "0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9",
-    "chain": "base-sepolia",
-    "seller_address": "0xa821f428ef8cc9f54a9915336a82220853059090",
-    "expected_amount": "10000",
-    "expected_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    "metadata": {
-      "source": "my_merchant_app",
-      "resource": "http://localhost:8080/photos",
-      "paymentPayload": {
-        "x402Version": 1,
-        "scheme": "exact",
-        "network": "base-sepolia",
-        "payload": {
-          "authorization": {
-            "from": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480",
-            "to": "0xa821f428ef8cc9f54a9915336a82220853059090",
-            "value": "10000",
-            "validAfter": "0",
-            "validBefore": "1735689600",
-            "nonce": "0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9",
-            "token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
-          },
-          "signature": "0x1e112204abec0856f56559b2d9a58d4e7bb5daec70e121c0ef8a2a7acb01619d498d8b0a68a180cc80a1cf7eba9b84bbd123140600e6b199edd79dc19ad0453d1c"
-        }
-      },
-      "payer": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480"
+    "payment": {
+      "x402Version": 2,
+      "payload": {
+        "authorization": {
+          "from": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480",
+          "to": "0xA821f428Ef8cC9f54A9915336A82220853059090",
+          "value": "20000",
+          "validAfter": "0",
+          "validBefore": "1735689600",
+          "nonce": "0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9"
+        },
+        "signature": "0x1e112204abec0856f56559b2d9a58d4e7bb5daec..."
+      }
+    },
+    "requirements": {
+      "scheme": "exact",
+      "price": "$0.02",
+      "network": "eip155:84532",
+      "payTo": "0xA821f428Ef8cC9f54A9915336A82220853059090",
+      "token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
     }
   }'
 ```
@@ -100,34 +79,34 @@ curl -X POST https://facilitator.0xmeta.ai/v1/verify \
 ```javascript JavaScript
 const response = await fetch("https://facilitator.0xmeta.ai/v1/verify", {
   method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    transaction_hash: authorization.nonce,
-    chain: "base-sepolia",
-    seller_address: "0xa821f428ef8cc9f54a9915336a82220853059090",
-    expected_amount: "10000",
-    expected_token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    metadata: {
-      source: "my_merchant_app",
-      resource: "http://localhost:8080/photos",
-      paymentPayload: {
-        x402Version: 1,
-        scheme: "exact",
-        network: "base-sepolia",
-        payload: {
-          authorization: authorization,
-          signature: signature,
+    payment: {
+      x402Version: 2,
+      payload: {
+        authorization: {
+          from: customerAddress,
+          to: merchantAddress,  // ← YOUR address
+          value: "20000",       // $0.02 USDC
+          validAfter: "0",
+          validBefore: String(Math.floor(Date.now() / 1000) + 86400),
+          nonce: randomNonce(),
         },
-      },
-      payer: userAddress,
+        signature: signature
+      }
     },
-  }),
+    requirements: {
+      scheme: "exact",
+      price: "$0.02",
+      network: "eip155:84532",
+      payTo: merchantAddress,  // ← YOUR address
+      token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+    }
+  })
 });
 
 const data = await response.json();
-console.log(data.verification_id);
+console.log(data.isValid);  // true
 ```
 
 ```python Python
@@ -137,57 +116,53 @@ response = requests.post(
     'https://facilitator.0xmeta.ai/v1/verify',
     headers={'Content-Type': 'application/json'},
     json={
-        'transaction_hash': '0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9',
-        'chain': 'base-sepolia',
-        'seller_address': '0xa821f428ef8cc9f54a9915336a82220853059090',
-        'expected_amount': '10000',
-        'expected_token': '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-        'metadata': {
-            'source': 'my_merchant_app',
-            'paymentPayload': {
-                'x402Version': 1,
-                'scheme': 'exact',
-                'network': 'base-sepolia',
-                'payload': {
-                    'authorization': authorization,
-                    'signature': signature
-                }
-            },
-            'payer': user_address
+        'payment': {
+            'x402Version': 2,
+            'payload': {
+                'authorization': {
+                    'from': customer_address,
+                    'to': merchant_address,  # YOUR address
+                    'value': '20000',
+                    'validAfter': '0',
+                    'validBefore': str(int(time.time()) + 86400),
+                    'nonce': random_nonce()
+                },
+                'signature': signature
+            }
+        },
+        'requirements': {
+            'scheme': 'exact',
+            'price': '$0.02',
+            'network': 'eip155:84532',
+            'payTo': merchant_address,  # YOUR address
+            'token': '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
         }
     }
 )
 
 data = response.json()
-print(data['verification_id'])
+print(data['isValid'])
 ```
 
-</RequestExample>
+</CodeGroup>
+
+---
+
+## Response Examples
 
 <ResponseExample>
 
-```json Success Response (200 OK)
+```json Success (200 OK)
 {
-  "verification_id": "vrf_b183c9692fac4481",
-  "status": "verified",
-  "transaction_hash": "0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9",
-  "chain": "base-sepolia",
-  "verified_amount": "10000",
-  "verified_token": "0x036cbd53842c5426634e7929541ec2318f3dcf7e",
-  "seller_address": "0xa821f428ef8cc9f54a9915336a82220853059090",
-  "payer_address": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480",
-  "verified_at": "2025-11-24T07:42:40Z",
-  "upstream_response": {
-    "authorization": {
-      "from": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480",
-      "to": "0xa821f428ef8cc9f54a9915336a82220853059090",
-      "value": "10000",
-      "validAfter": "0",
-      "validBefore": "1735689600",
-      "nonce": "0xee232e308a6647938a68aee1ae355b85a262e4e450b7fde55cd4e729e6444ce9",
-      "signature": "0x1e112204abec0856f56559b2d9a58d4e7bb5daec70e121c0ef8a2a7acb01619d498d8b0a68a180cc80a1cf7eba9b84bbd123140600e6b199edd79dc19ad0453d1c",
-      "valid": true
-    }
+  "isValid": true,
+  "message": "Payment authorization verified successfully",
+  "details": {
+    "verification_id": "vrf_b183c9692fac4481",
+    "verified_amount": "20000",
+    "verified_token": "0x036cbd53842c5426634e7929541ec2318f3dcf7e",
+    "merchant_address": "0xa821f428ef8cc9f54a9915336a82220853059090",
+    "payer_address": "0x78b6b8c55d5ea96be6ca8213e61b0fa53e862480",
+    "verified_at": "2025-01-23T10:42:40Z"
   }
 }
 ```
@@ -198,7 +173,36 @@ print(data['verification_id'])
     "code": "verification_failed",
     "message": "Invalid EIP-3009 signature",
     "details": {
-      "reason": "Signature verification failed"
+      "reason": "Signature verification failed",
+      "recovered": "0x1234...",
+      "expected": "0x78b6..."
+    }
+  }
+}
+```
+
+```json Wrong Recipient (400)
+{
+  "error": {
+    "code": "verification_failed",
+    "message": "Payment must be to merchant address",
+    "details": {
+      "authorization_to": "0x5d79...",
+      "expected_payTo": "0xA821...",
+      "reason": "Customer must authorize payment to merchant, not facilitator"
+    }
+  }
+}
+```
+
+```json Amount Mismatch (400)
+{
+  "error": {
+    "code": "verification_failed",
+    "message": "Amount mismatch",
+    "details": {
+      "authorization_value": "10000",
+      "expected_amount": "20000"
     }
   }
 }
@@ -219,114 +223,117 @@ print(data['verification_id'])
 
 </ResponseExample>
 
+---
+
 ## Response Fields
 
-<ResponseField name="verification_id" type="string" required>
-  Unique identifier for this verification. Use this for settlement.
+<ResponseField name="isValid" type="boolean" required>
+  Whether the payment authorization is valid
 </ResponseField>
 
-<ResponseField name="status" type="string" required>
-  Verification status: `verified`, `pending`, `failed`, or `rejected`
+<ResponseField name="message" type="string" required>
+  Human-readable verification result
 </ResponseField>
 
-<ResponseField name="transaction_hash" type="string" required>
-  The nonce hash used as transaction reference
+<ResponseField name="details" type="object">
+  **details.verification_id:** Use this for settlement
+  
+  **details.verified_amount:** Confirmed payment amount
+  
+  **details.merchant_address:** Merchant receiving payment
+  
+  **details.payer_address:** Customer making payment
+  
+  **details.verified_at:** ISO 8601 timestamp
 </ResponseField>
 
-<ResponseField name="chain" type="string" required>
-  The blockchain network (base or base-sepolia)
-</ResponseField>
-
-<ResponseField name="verified_amount" type="string">
-  Verified payment amount in token's smallest unit
-</ResponseField>
-
-<ResponseField name="verified_token" type="string">
-  Verified token contract address
-</ResponseField>
-
-<ResponseField name="seller_address" type="string">
-  Merchant's receiving address
-</ResponseField>
-
-<ResponseField name="payer_address" type="string">
-  Customer's wallet address (from authorization)
-</ResponseField>
-
-<ResponseField name="verified_at" type="string">
-  ISO 8601 timestamp when verification completed
-</ResponseField>
-
-<ResponseField name="upstream_response" type="object">
-  Full authorization details including signature validation result
-</ResponseField>
+---
 
 ## Verification Process
 
 ```mermaid
 flowchart TD
-    A[Receive Verification Request] --> B{Valid Request?}
+    A[Receive Verification Request] --> B{Valid Format?}
     B -->|No| C[Return 400 Error]
-    B -->|Yes| D[Extract EIP-3009 Authorization]
+    B -->|Yes| D[Extract Authorization]
 
     D --> E[Recover Signer from Signature]
     E --> F{Signature Valid?}
     F -->|No| G[Return verification_failed]
 
-    F -->|Yes| H{From Address Matches?}
-    H -->|No| G
+    F -->|Yes| H{To = Merchant Address?}
+    H -->|No| I[Return: Must pay to merchant]
 
-    H -->|Yes| I{To Address Matches?}
-    I -->|No| G
-
-    I -->|Yes| J{Amount Matches?}
+    H -->|Yes| J{Amount Matches?}
     J -->|No| G
 
     J -->|Yes| K{Token Matches?}
     K -->|No| G
 
-    K -->|Yes| L{Authorization Not Expired?}
+    K -->|Yes| L{Not Expired?}
     L -->|No| G
 
     L -->|Yes| M[Save to Database]
-    M --> N[Cache in Redis]
-    N --> O[Return Verified]
+    M --> N[Return isValid: true]
 
-    style O fill:#d4edda
+    style N fill:#d4edda
     style G fill:#f8d7da
-    style C fill:#f8d7da
+    style I fill:#fff3cd
 ```
+
+---
 
 ## What Gets Verified
 
 <Steps>
   <Step title="Signature Validation">
-    EIP-712 signature is cryptographically verified using `ecrecover`
+    EIP-712 signature cryptographically verified using `ecrecover`
   </Step>
 
-{" "}
-<Step title="Address Matching">
-  - `from` address matches recovered signer - `to` address matches expected
-  seller_address
-</Step>
+  <Step title="Recipient Validation">
+    **Critical:** Authorization `to` address must match merchant address from `requirements.payTo`
+    
+    ✅ `authorization.to == requirements.payTo` (merchant address)
+    
+    ❌ `authorization.to == treasury_address` (wrong!)
+  </Step>
 
-{" "}
-<Step title="Amount Validation">
-  Authorization value matches expected_amount exactly
-</Step>
+  <Step title="Amount Validation">
+    Authorization value matches expected amount exactly
+  </Step>
 
-{" "}
-<Step title="Token Validation">Token address matches expected_token</Step>
+  <Step title="Token Validation">
+    Token address matches expected token (if specified)
+  </Step>
 
-{" "}
-<Step title="Expiry Check">
-  Current time is between `validAfter` and `validBefore`
-</Step>
+  <Step title="Expiry Check">
+    Current time is between `validAfter` and `validBefore`
+  </Step>
 
   <Step title="Nonce Uniqueness">
     Nonce hasn't been used in a previous settlement
   </Step>
 </Steps>
+
+---
+
+## Important Notes
+
+<Warning>
+**Customer must authorize to MERCHANT address, not facilitator.**
+
+The facilitator will reject authorizations to the treasury address. This maintains x402 trust-minimization.
+</Warning>
+
+<Info>
+**Verification is FREE** - unlimited verifications at no cost. Only successful settlements incur the $0.01 fee (collected from merchant's approved balance).
+</Info>
+
+<Tip>
+Save the `verification_id` - you'll need it for settlement! Store it with your order/transaction record.
+</Tip>
+
+---
 
 ## Common Use Cases
 
@@ -334,14 +341,18 @@ flowchart TD
   <Accordion title="USDC Payment on Base Sepolia">
     ```json
     {
-      "transaction_hash": "0x...",
-      "chain": "base-sepolia",
-      "seller_address": "0xa821f428ef8cc9f54a9915336a82220853059090",
-      "expected_amount": "10000",
-      "expected_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-      "metadata": {
-        "source": "my_app",
-        "paymentPayload": { /* ... */ }
+      "payment": {
+        "payload": {
+          "authorization": {
+            "to": "0xA821f428Ef8cC9f54A9915336A82220853059090",  // Merchant
+            "value": "20000",  // $0.02
+            ...
+          }
+        }
+      },
+      "requirements": {
+        "payTo": "0xA821f428Ef8cC9f54A9915336A82220853059090",  // Same merchant
+        "token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"  // USDC Sepolia
       }
     }
     ```
@@ -350,38 +361,67 @@ flowchart TD
   <Accordion title="USDC Payment on Base Mainnet">
     ```json
     {
-      "transaction_hash": "0x...",
-      "chain": "base",
-      "seller_address": "0x...",
-      "expected_amount": "1000000",
-      "expected_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      "metadata": {
-        "source": "my_app",
-        "paymentPayload": { /* ... */ }
+      "requirements": {
+        "price": "$0.02",
+        "network": "eip155:8453",  // Base Mainnet
+        "payTo": "0x...",  // Merchant address
+        "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"  // USDC Mainnet
       }
     }
     ```
   </Accordion>
 </AccordionGroup>
 
-## Important Notes
+---
 
-<Info>
-  Verifications are processed in **under 2 seconds**. The authorization is
-  validated against EIP-3009 standards without any on-chain interaction.
-</Info>
+## Error Prevention
 
-<Warning>
-  Each nonce can only be used **once**. Generate a unique random nonce for every
-  payment to prevent conflicts.
-</Warning>
+<Steps>
+  <Step title="Use Merchant Address">
+    Always set `authorization.to` = merchant address (not treasury)
+  </Step>
+  
+  <Step title="Generate Unique Nonce">
+    ```javascript
+    const nonce = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map(b => b.toString(16).padStart(2, "0"))
+      .join("");
+    ```
+  </Step>
+  
+  <Step title="Set Long Validity">
+    ```javascript
+    validBefore: String(Math.floor(Date.now() / 1000) + 86400)  // 24 hours
+    ```
+  </Step>
+  
+  <Step title="Match Amounts Exactly">
+    Ensure `authorization.value` matches `requirements.price` or `amount`
+  </Step>
+</Steps>
 
-<Tip>
-  Cache the `verification_id` - you'll need it for settlement! Store it with
-  your order/transaction record.
-</Tip>
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Settle Payment" icon="check" href="/api-reference/settle">
+    Execute settlement after verification
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/api-reference/errors">
+    Handle verification failures
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand payment flow
+  </Card>
+  
+  <Card title="Integration Guide" icon="book" href="/x402-integration">
+    Complete setup guide
+  </Card>
+</CardGroup>
 
 <Check>
-  **Verification is FREE** - no fees charged for validating payment
-  authorizations.
+**Verification complete!** Use the `verification_id` to settle the payment.
 </Check>

@@ -1,39 +1,38 @@
 ---
 title: "Getting Started"
-description: "Complete setup guide for merchants accepting x402 payments"
+description: "Complete setup guide for merchants accepting x402 payments" 
 ---
 
 ## Overview
 
-This guide walks you through setting up your merchant account to accept x402 payments via 0xmeta.
+This guide walks you through setting up your merchant account to accept x402 payments via 0xmeta facilitator with post-settlement fee collection.
 
 <Note>
-  **No account needed!** The API is permissionless. The only setup required is
-  approving USDC spending for fee collection.
+**Trust-Minimized:** Customer payments go directly to your address. The facilitator collects a $0.01 fee from your pre-approved USDC balance after each settlement.
 </Note>
 
 ## Prerequisites
 
 <Steps>
   <Step title="Merchant Wallet">
-    You need an Ethereum wallet address where you'll receive payments
+    An Ethereum wallet address where you'll receive customer payments
   </Step>
 
-{" "}
-<Step title="Private Key Access">
-  Access to the wallet's private key (for one-time USDC approval setup)
-</Step>
+  <Step title="Private Key Access">
+    Access to the wallet's private key (for one-time USDC approval)
+  </Step>
 
-{" "}
-<Step title="Base Network Assets">
-  - **ETH**: ~0.001 ETH for gas fees (approval transaction) - **USDC**: ~$10
-  USDC for fees (covers ~10,000 settlements)
-</Step>
+  <Step title="Base Network Assets">
+    - **ETH**: ~0.001 ETH for approval transaction gas
+    - **USDC**: ~100 USDC for fees (covers ~10,000 settlements)
+  </Step>
 
   <Step title="Network Selection">
     Choose Base Mainnet (production) or Base Sepolia (testing)
   </Step>
 </Steps>
+
+---
 
 ## Step 1: Get Testnet Assets (For Testing)
 
@@ -73,165 +72,93 @@ https://faucet.circle.com/
 
 ## Step 2: Approve USDC Spending
 
-This is the **only required setup step**. You must approve 0xmeta's treasury to collect the $0.001 fee per settlement.
+This is the **only required setup step**. You must approve 0xmeta's treasury to collect the $0.01 fee per settlement from your USDC balance.
+
+### Why Approval Is Required
+
+The facilitator uses standard ERC-20 `transferFrom` to collect fees:
+
+```solidity
+// You approve facilitator (one-time)
+USDC.approve(treasury, 100 * 10^6); // 100 USDC
+
+// Later, facilitator collects fee per settlement
+USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
+```
+
+This is how the facilitator maintains x402 trust-minimization:
+- ✅ Customers pay YOU directly
+- ✅ Facilitator collects fee from YOUR approved balance
+- ✅ No facilitator custody of customer funds
 
 ### Option A: Using Our Setup Script (Recommended)
 
-If you're using our merchant demo:
+**1. Install dependencies:**
 
 ```bash
-# Navigate to merchant demo directory
-cd merchant_demo
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run approval setup
-python -m app.merchant_approval \
-  --network base-sepolia \
-  --amount 1000 \
-  --auto-confirm
+npm install ethers dotenv
 ```
 
-**What this does:**
+**2. Configure environment:**
 
-1. Connects to Base Sepolia RPC
-2. Checks your current USDC allowance
-3. Approves treasury to spend 1000 USDC
-4. Returns transaction hash
+```bash
+# Create .env file
+cat > .env << EOF
+EVM_PRIVATE_KEY=0x...  # Your merchant private key
+NETWORK=sepolia        # or mainnet
+EOF
+```
+
+**3. Run approval:**
+
+```bash
+node approve-facilitator.mjs
+```
 
 **Expected output:**
 
 ```
-================================================================================
-0xmeta Merchant Approval Setup
-================================================================================
+📍 Base Sepolia
+   Merchant: 0xA821f428Ef8cC9f54A9915336A82220853059090
+   Treasury: 0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B
 
-🔍 Checking merchant USDC approval status...
-✅ Connected to RPC: https://base-sepolia-rpc.publicnode.com
-❌ Merchant approval: NOT SET
-   Current allowance: 0.00 USDC
-   Facilitator: 0xa92560dcaf2fb556dfee4d2599f021a511b94aae
-
-🔐 Auto-setting up approval for 1000 USDC...
-✅ Transaction sent: 0x1234...
-⏳ Waiting for confirmation...
+💰 Approving 100 USDC for fee collection...
+   Transaction: 0x123...
 ✅ Approval successful!
-   Transaction: 0x1234...
-   New allowance: 1000.00 USDC
-   Estimated transactions: ~100,000
-
-🎉 Setup complete! 0xmeta can now collect settlement fees.
+   Allowance: 100.0 USDC
+   Settlements: ~10000
 ```
 
-### Option B: Manual Approval (via ethers.js)
+**Script source:** See [approve-facilitator.mjs](#approval-script-reference)
 
-```javascript
-const { ethers } = require("ethers");
+### Option B: Manual Approval (via Etherscan)
 
-// Configuration
-const NETWORK = "base-sepolia";
-const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-const TREASURY_ADDRESS = "0xa92560dcaf2fb556dfee4d2599f021a511b94aae";
-const RPC_URL = "https://sepolia.base.org";
+**1. Visit Base USDC contract:**
 
-// Setup provider and signer
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(process.env.MERCHANT_PRIVATE_KEY, provider);
-
-// USDC contract ABI (approve function)
-const usdcAbi = [
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-];
-
-async function setupApproval() {
-  const usdc = new ethers.Contract(USDC_ADDRESS, usdcAbi, wallet);
-
-  // Check current allowance
-  const currentAllowance = await usdc.allowance(
-    wallet.address,
-    TREASURY_ADDRESS
-  );
-
-  console.log(
-    "Current allowance:",
-    ethers.formatUnits(currentAllowance, 6),
-    "USDC"
-  );
-
-  // Approve 1000 USDC (1000 * 10^6)
-  const approvalAmount = ethers.parseUnits("1000", 6);
-
-  console.log("Approving", ethers.formatUnits(approvalAmount, 6), "USDC...");
-
-  const tx = await usdc.approve(TREASURY_ADDRESS, approvalAmount);
-  console.log("Transaction sent:", tx.hash);
-
-  await tx.wait();
-  console.log("✅ Approval confirmed!");
-
-  // Verify new allowance
-  const newAllowance = await usdc.allowance(wallet.address, TREASURY_ADDRESS);
-  console.log("New allowance:", ethers.formatUnits(newAllowance, 6), "USDC");
-}
-
-setupApproval().catch(console.error);
+**Sepolia:**
+```
+https://sepolia.basescan.org/address/0x036CbD53842c5426634e7929541eC2318f3dCF7e#writeContract
 ```
 
-### Option C: Via Web3.py
-
-```python
-from web3 import Web3
-from eth_account import Account
-import os
-
-# Configuration
-NETWORK = 'base-sepolia'
-USDC_ADDRESS = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
-TREASURY_ADDRESS = '0xa92560dcaf2fb556dfee4d2599f021a511b94aae'
-RPC_URL = 'https://sepolia.base.org'
-
-# Setup Web3
-w3 = Web3(Web3.HTTPProvider(RPC_URL))
-account = Account.from_key(os.getenv('MERCHANT_PRIVATE_KEY'))
-
-# USDC contract
-usdc_abi = [
-    {
-        'constant': False,
-        'inputs': [
-            {'name': '_spender', 'type': 'address'},
-            {'name': '_value', 'type': 'uint256'}
-        ],
-        'name': 'approve',
-        'outputs': [{'name': '', 'type': 'bool'}],
-        'type': 'function'
-    }
-]
-
-usdc = w3.eth.contract(address=Web3.to_checksum_address(USDC_ADDRESS), abi=usdc_abi)
-
-# Approve 1000 USDC
-approval_amount = 1000 * 10**6  # 1000 USDC (6 decimals)
-
-tx = usdc.functions.approve(
-    Web3.to_checksum_address(TREASURY_ADDRESS),
-    approval_amount
-).build_transaction({
-    'from': account.address,
-    'nonce': w3.eth.get_transaction_count(account.address),
-    'gas': 100000,
-    'gasPrice': w3.eth.gas_price
-})
-
-signed_tx = account.sign_transaction(tx)
-tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-
-print(f'Transaction sent: {tx_hash.hex()}')
-receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-print(f'✅ Approval confirmed!')
+**Mainnet:**
 ```
+https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913#writeContract
+```
+
+**2. Connect your wallet**
+
+**3. Call `approve` function:**
+
+- **spender:** `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B` (Treasury)
+- **amount:** `100000000` (100 USDC with 6 decimals)
+
+**4. Confirm transaction**
+
+<Warning>
+**Approval amount = settlements × $0.01**
+
+Example: 100 USDC approval = 10,000 settlements
+</Warning>
 
 ---
 
@@ -240,129 +167,291 @@ print(f'✅ Approval confirmed!')
 Check that approval was successful:
 
 ```bash
-# Using our script
-python -m app.merchant_approval --network base-sepolia --check-only
+node check-allowance.mjs
 ```
 
 **Expected output:**
 
 ```
-✅ Merchant approval: OK
-   Current allowance: 1000.00 USDC
-   Facilitator: 0xa92560dcaf2fb556dfee4d2599f021a511b94aae
-   Estimated transactions: ~100,000
+============================================================
+0xmeta Facilitator Fee Allowance Check
+============================================================
+
+👤 Merchant: 0xA821f428Ef8cC9f54A9915336A82220853059090
+🏦 Treasury: 0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B
+
+📍 Base Sepolia
+   USDC Balance: 500.00 USDC
+   Fee Allowance: 100.00 USDC
+   Settlements Remaining: 10000
+   ✅ Good
+
+============================================================
 ```
 
-### Or check on BaseScan
-
-Visit:
-
-```
-https://sepolia.basescan.org/token/0x036CbD53842c5426634e7929541eC2318f3dCF7e?a=YOUR_MERCHANT_ADDRESS
-```
-
-Look for "Approve" transaction to treasury address.
+**Script source:** See [check-allowance.mjs](#monitoring-script-reference)
 
 ---
 
-## Step 4: Integrate API
+## Step 4: Integrate x402 Middleware
 
-Now you're ready to accept payments! Here's a complete example:
+Now you're ready to accept payments! Choose your x402 version:
 
-```javascript
-// Client-side: User creates authorization
-const authorization = {
-  from: userAddress,
-  to: merchantAddress,
-  value: "10000", // 0.01 USDC
-  validAfter: "0",
-  validBefore: String(Math.floor(Date.now() / 1000) + 86400), // 24h
-  nonce: generateRandomNonce(),
-  token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-};
+### Option A: x402 v2 (Recommended)
 
-const signature = await ethereum.request({
-  method: "eth_signTypedData_v4",
-  params: [userAddress, JSON.stringify(typedData)],
-});
+<CodeGroup>
 
-// Server-side: Verify and settle
-// 1. Verify
-const verifyResponse = await fetch("https://facilitator.0xmeta.ai/v1/verify", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    transaction_hash: authorization.nonce,
-    chain: "base-sepolia",
-    seller_address: merchantAddress,
-    expected_amount: "10000",
-    expected_token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    metadata: {
-      source: "my_app",
-      paymentPayload: {
-        x402Version: 1,
-        scheme: "exact",
-        network: "base-sepolia",
-        payload: { authorization, signature },
-      },
+```typescript server.ts
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+
+config();
+
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
+const facilitatorUrl = "https://facilitator.0xmeta.ai/v1";
+
+const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+const app = express();
+
+app.use(
+  paymentMiddleware(
+    {
+      "GET /premium-content": {
+        accepts: [{
+          scheme: "exact",
+          price: "$0.02",           // Your price + fee
+          network: "eip155:84532",  // Base Sepolia
+          payTo: evmAddress,        // YOUR address
+        }],
+        description: "Premium content access"
+      }
     },
-  }),
+    new x402ResourceServer(facilitatorClient)
+      .register("eip155:84532", new ExactEvmScheme())
+  )
+);
+
+app.get("/premium-content", (req, res) => {
+  res.json({ content: "This is premium content" });
 });
 
-const { verification_id } = await verifyResponse.json();
+app.listen(4021, () => {
+  console.log("Server ready at http://localhost:4021");
+});
+```
 
-// 2. Settle
-const settleResponse = await fetch("https://facilitator.0xmeta.ai/v1/settle", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    verification_id,
-    destination_address: merchantAddress,
-  }),
+```env .env
+# YOUR merchant address (receives customer payments)
+EVM_ADDRESS=0xA821f428Ef8cC9f54A9915336A82220853059090
+
+# Facilitator URL
+FACILITATOR_URL=https://facilitator.0xmeta.ai/v1
+```
+
+```bash Install
+npm install @x402/express @x402/evm @x402/core express dotenv
+```
+
+</CodeGroup>
+
+### Option B: x402 v1 (Legacy)
+
+<CodeGroup>
+
+```typescript server-v1.ts
+import { config } from "dotenv";
+import express from "express";
+import { paymentMiddleware } from "x402-express";
+
+config();
+
+const evmAddress = process.env.EVM_ADDRESS as `0x${string}`;
+const facilitatorUrl = "https://facilitator.0xmeta.ai/v1";
+
+const app = express();
+
+app.use(
+  paymentMiddleware(
+    evmAddress,  // YOUR address
+    {
+      "GET /premium-content": {
+        price: "$0.02",
+        network: "base-sepolia",
+      }
+    },
+    { url: facilitatorUrl }
+  )
+);
+
+app.get("/premium-content", (req, res) => {
+  res.json({ content: "This is premium content" });
 });
 
-const { settlement_id } = await settleResponse.json();
+app.listen(4021);
+```
 
-// 3. Poll for status
-const settlement = await waitForSettlement(settlement_id);
-console.log("Payment complete!", settlement.settlement_tx_hash);
+```bash Install
+npm install x402-express express dotenv
+```
+
+</CodeGroup>
+
+---
+
+## Step 5: Test Payment Flow
+
+### 1. Start Your Server
+
+```bash
+npm start
+```
+
+### 2. Test with x402 Client
+
+Create a test client (or use our example):
+
+```typescript
+import { x402Client, wrapAxiosWithPayment } from "@x402/axios";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { privateKeyToAccount } from "viem/accounts";
+import axios from "axios";
+
+const clientPrivateKey = process.env.CLIENT_PRIVATE_KEY as `0x${string}`;
+const evmSigner = privateKeyToAccount(clientPrivateKey);
+
+const client = new x402Client();
+registerExactEvmScheme(client, { signer: evmSigner });
+
+const api = wrapAxiosWithPayment(axios.create(), client);
+
+// Make request
+const response = await api.get("http://localhost:4021/premium-content");
+console.log(response.data); // { content: "This is premium content" }
+```
+
+### 3. Expected Flow
+
+```
+1. ✅ Client requests /premium-content
+2. ✅ Server returns 402 Payment Required
+   Headers: payTo = YOUR_MERCHANT_ADDRESS
+3. ✅ Client creates authorization to YOUR address
+4. ✅ Client sends to facilitator
+5. ✅ Facilitator verifies authorization
+6. ✅ Facilitator collects $0.01 from YOUR approved balance
+7. ✅ Facilitator executes: Customer → YOU ($0.02)
+8. ✅ Server returns 200 OK + premium content
+```
+
+<Check>
+**Success!** If you see the premium content, your integration is working.
+</Check>
+
+---
+
+## Step 6: Monitor Allowance
+
+Set up regular monitoring to ensure you don't run out of approved funds:
+
+### Manual Check
+
+```bash
+node check-allowance.mjs
+```
+
+### Automated Monitoring
+
+**Option 1: Cron job**
+
+```bash
+# Check allowance daily at 9 AM
+0 9 * * * cd /path/to/project && node check-allowance.mjs
+```
+
+**Option 2: Application monitoring**
+
+```typescript
+import { ethers } from "ethers";
+
+async function checkAllowance() {
+  const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
+  const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
+  
+  const allowance = await usdc.allowance(merchantAddress, treasuryAddress);
+  const settlements = Math.floor(Number(ethers.formatUnits(allowance, 6)) / 0.01);
+  
+  if (settlements < 100) {
+    alert("Low allowance! Top up soon.");
+  }
+  
+  return settlements;
+}
+
+// Check every hour
+setInterval(checkAllowance, 3600000);
 ```
 
 ---
 
-## Step 5: Production Deployment
+## Step 7: Production Deployment
 
 When ready for production:
 
 ### Switch to Base Mainnet
 
-Update your configuration:
+**1. Update configuration:**
 
-```javascript
-// Production config
-const config = {
-  network: "base",
-  chainId: 8453,
-  usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  rpcUrl: "https://mainnet.base.org",
-};
+```typescript
+// v2
+network: "eip155:8453"  // Base Mainnet
+
+// v1
+network: "base"
 ```
 
-### Run Approval on Mainnet
+**2. Run approval on mainnet:**
 
 ```bash
 # Get real USDC and ETH first!
-python -m app.merchant_approval \
-  --network base \
-  --amount 10000 \
-  --auto-confirm
+NETWORK=mainnet node approve-facilitator.mjs
 ```
 
-<Warning>
-  **Production checklist:** - ✅ Merchant wallet has real ETH for gas - ✅
-  Merchant wallet has real USDC for fees - ✅ Approval transaction confirmed -
-  ✅ Test with small payment first ($1) - ✅ Monitor settlements closely
-</Warning>
+**3. Update environment:**
+
+```env
+EVM_ADDRESS=0x...  # Your mainnet address
+NETWORK=mainnet
+```
+
+### Production Checklist
+
+<Steps>
+  <Step title="Approval Confirmed">
+    - [ ] Approved ≥ 100 USDC on mainnet
+    - [ ] Verified via check-allowance.mjs
+  </Step>
+  
+  <Step title="Testing Complete">
+    - [ ] Tested full payment flow on Sepolia
+    - [ ] Verified customer payments received
+    - [ ] Confirmed fee collection working
+  </Step>
+  
+  <Step title="Monitoring Setup">
+    - [ ] Automated allowance checks configured
+    - [ ] Alerts for low balance set up
+    - [ ] Settlement logging in place
+  </Step>
+  
+  <Step title="Security">
+    - [ ] Private keys secured (not in code)
+    - [ ] .env file in .gitignore
+    - [ ] Reasonable approval amount (not infinite)
+  </Step>
+</Steps>
 
 ---
 
@@ -374,7 +463,7 @@ python -m app.merchant_approval \
 | ------------ | ------------------------------------------------------------- |
 | **Chain ID** | `84532`                                                       |
 | **USDC**     | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`                  |
-| **Treasury** | `0xa92560dcaf2fb556dfee4d2599f021a511b94aae`                  |
+| **Treasury** | `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B`                  |
 | **RPC**      | `https://sepolia.base.org`                                    |
 | **Explorer** | `https://sepolia.basescan.org`                                |
 | **Faucet**   | https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet |
@@ -385,7 +474,7 @@ python -m app.merchant_approval \
 | ------------ | -------------------------------------------- |
 | **Chain ID** | `8453`                                       |
 | **USDC**     | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| **Treasury** | `0xa92560dcaf2fb556dfee4d2599f021a511b94aae` |
+| **Treasury** | `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B` |
 | **RPC**      | `https://mainnet.base.org`                   |
 | **Explorer** | `https://basescan.org`                       |
 
@@ -403,49 +492,222 @@ python -m app.merchant_approval \
     **Solution:**
     - Check ETH balance: Must have ~0.001 ETH
     - Verify you're on correct network
-    - Double-check treasury address
+    - Double-check treasury address: `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B`
   </Accordion>
 
-{" "}
-<Accordion title="Settlement fails with 'insufficient_allowance'">
-  **Cause:** Approval wasn't successful or amount too low **Solution:** ```bash
-  # Check current allowance python -m app.merchant_approval --network
-  base-sepolia --check-only # If zero, run approval again python -m
-  app.merchant_approval --network base-sepolia --amount 1000 ```
-</Accordion>
+  <Accordion title="Settlement fails with 'insufficient_allowance'">
+    **Cause:** Approval wasn't successful or depleted
+    
+    **Solution:**
+    ```bash
+    # Check current allowance
+    node check-allowance.mjs
+    
+    # If zero, run approval again
+    node approve-facilitator.mjs
+    ```
+  </Accordion>
 
   <Accordion title="Can't connect to RPC">
     **Cause:** Network issues or RPC rate limiting
     
     **Solution:**
-    - Our script tries multiple RPC endpoints automatically
     - Wait a few minutes and try again
     - Use custom RPC (Alchemy, Infura, QuickNode)
+    - Check Base network status
+  </Accordion>
+
+  <Accordion title="Customer payments not arriving">
+    **Cause:** Wrong address in payTo
+    
+    **Solution:**
+    Verify `payTo` uses YOUR merchant address (not treasury):
+    
+    ```typescript
+    // ✅ Correct
+    payTo: process.env.EVM_ADDRESS  // Your address
+    
+    // ❌ Wrong
+    payTo: "0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B"  // Treasury
+    ```
   </Accordion>
 </AccordionGroup>
+
+---
+
+## Script References
+
+### Approval Script Reference
+
+Save as `approve-facilitator.mjs`:
+
+```javascript
+import { ethers } from "ethers";
+import dotenv from "dotenv";
+dotenv.config();
+
+const NETWORKS = {
+  sepolia: {
+    name: "Base Sepolia",
+    rpc: "https://sepolia.base.org",
+    chainId: 84532,
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  },
+  mainnet: {
+    name: "Base Mainnet",
+    rpc: "https://mainnet.base.org",
+    chainId: 8453,
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  },
+};
+
+const OXMETA_TREASURY = "0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B";
+const USDC_ABI = [
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+];
+
+async function main() {
+  const networkKey = process.env.NETWORK || "sepolia";
+  const network = NETWORKS[networkKey];
+  
+  const privateKey = process.env.EVM_PRIVATE_KEY;
+  if (!privateKey) {
+    console.error("❌ EVM_PRIVATE_KEY required");
+    process.exit(1);
+  }
+  
+  const provider = new ethers.JsonRpcProvider(network.rpc);
+  const merchant = new ethers.Wallet(privateKey, provider);
+  const usdc = new ethers.Contract(network.usdc, USDC_ABI, merchant);
+  
+  console.log(`\n📍 ${network.name}`);
+  console.log(`   Merchant: ${merchant.address}`);
+  console.log(`   Treasury: ${OXMETA_TREASURY}`);
+  
+  const approvalAmount = ethers.parseUnits("100", 6); // 100 USDC
+  
+  console.log(`\n💰 Approving 100 USDC...`);
+  const tx = await usdc.approve(OXMETA_TREASURY, approvalAmount);
+  console.log(`   Transaction: ${tx.hash}`);
+  
+  await tx.wait();
+  console.log(`✅ Approval successful!`);
+  
+  const allowance = await usdc.allowance(merchant.address, OXMETA_TREASURY);
+  console.log(`   Allowance: ${ethers.formatUnits(allowance, 6)} USDC`);
+  console.log(`   Settlements: ~${Math.floor(Number(ethers.formatUnits(allowance, 6)) / 0.01)}`);
+}
+
+main().catch(console.error);
+```
+
+### Monitoring Script Reference
+
+Save as `check-allowance.mjs`:
+
+```javascript
+import { ethers } from "ethers";
+import dotenv from "dotenv";
+dotenv.config();
+
+const NETWORKS = {
+  sepolia: {
+    name: "Base Sepolia",
+    rpc: "https://sepolia.base.org",
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  },
+  mainnet: {
+    name: "Base Mainnet",
+    rpc: "https://mainnet.base.org",
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  },
+};
+
+const OXMETA_TREASURY = "0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B";
+const USDC_ABI = [
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function balanceOf(address account) external view returns (uint256)",
+];
+
+async function checkNetwork(networkKey, merchantAddress) {
+  const network = NETWORKS[networkKey];
+  const provider = new ethers.JsonRpcProvider(network.rpc);
+  const usdc = new ethers.Contract(network.usdc, USDC_ABI, provider);
+  
+  const [allowance, balance] = await Promise.all([
+    usdc.allowance(merchantAddress, OXMETA_TREASURY),
+    usdc.balanceOf(merchantAddress),
+  ]);
+  
+  const allowanceFormatted = ethers.formatUnits(allowance, 6);
+  const balanceFormatted = ethers.formatUnits(balance, 6);
+  const settlements = Math.floor(Number(allowanceFormatted) / 0.01);
+  
+  console.log(`\n📍 ${network.name}`);
+  console.log(`   USDC Balance: ${balanceFormatted} USDC`);
+  console.log(`   Fee Allowance: ${allowanceFormatted} USDC`);
+  console.log(`   Settlements Remaining: ${settlements}`);
+  
+  if (settlements < 10) {
+    console.log(`   ⚠️  Low - run: NETWORK=${networkKey} node approve-facilitator.mjs`);
+  } else if (settlements < 50) {
+    console.log(`   ⚠️  Getting low`);
+  } else {
+    console.log(`   ✅ Good`);
+  }
+}
+
+async function main() {
+  const merchantAddress = process.env.EVM_ADDRESS;
+  if (!merchantAddress) {
+    console.error("❌ Set EVM_ADDRESS in .env");
+    process.exit(1);
+  }
+  
+  console.log("============================================================");
+  console.log("0xmeta Facilitator Fee Allowance Check");
+  console.log("============================================================");
+  console.log(`\n👤 Merchant: ${merchantAddress}`);
+  console.log(`🏦 Treasury: ${OXMETA_TREASURY}`);
+  
+  const networkArg = process.argv[2] || "both";
+  
+  if (networkArg === "both") {
+    await checkNetwork("sepolia", merchantAddress);
+    await checkNetwork("mainnet", merchantAddress);
+  } else {
+    await checkNetwork(networkArg, merchantAddress);
+  }
+  
+  console.log("\n============================================================");
+}
+
+main().catch(console.error);
+```
 
 ---
 
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="API Reference" icon="book" href="/api-reference/introduction">
-    Explore all endpoints
+  <Card title="x402 Integration" icon="book" href="/x402-integration">
+    Complete integration guide
   </Card>
-
-{" "}
-<Card title="Integration Examples" icon="code" href="/integration/nodejs">
-  View code examples
-</Card>
-
-{" "}
-<Card title="Best Practices" icon="lightbulb" href="/guides/best-practices">
-  Production tips
-</Card>
-
-  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
-    Common issues
+  
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand payment flow
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore endpoints
+  </Card>
+  
+  <Card title="FAQ" icon="question" href="/faq">
+    Common questions
   </Card>
 </CardGroup>
 
-<Check>**You're all set!** Start accepting x402 payments with 0xmeta.</Check>
+<Check>
+**You're all set!** Start accepting x402 payments with post-settlement fee collection.
+</Check>
