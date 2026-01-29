@@ -190,7 +190,6 @@ rm docs/advanced/monitoring.mdx
 **Contains:**
 - $0.01 flat fee explanation
 - Treasury-first fee collection flow
-- Comparison with Stripe/PayPal
 - Merchant economics calculator
 - Volume pricing information
 - Fee transparency section

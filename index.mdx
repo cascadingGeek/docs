@@ -5,10 +5,10 @@ description: "Get started with 0xmeta x402 facilitator in 5 minutes"
 
 ## Overview
 
-0xmeta is an **x402-compliant payment facilitator** that enables gasless payments on Base networks using EIP-3009 with **post-settlement fee collection**.
+0xmeta is an **x402-compliant payment facilitator** that enables gasless payments on Base networks using EIP-3009 with **pre-settlement fee collection**.
 
 <Note>
-**Post-Settlement Fees:** Customer payments go directly to your address. The facilitator collects a $0.01 fee from your pre-approved USDC balance after each settlement.
+**Pre-Settlement Fees:** The facilitator collects a $0.01 fee from your pre-approved USDC balance BEFORE executing the settlement. Customer payments then go directly to your address. No fee collection = no settlement.
 </Note>
 
 ## What You Need
@@ -33,7 +33,7 @@ description: "Get started with 0xmeta x402 facilitator in 5 minutes"
 
 ### Step 1: Approve Facilitator
 
-The facilitator collects fees from your USDC balance via `transferFrom`. This requires one-time approval:
+The facilitator collects fees from your USDC balance via `transferFrom` **before** executing settlements. This requires one-time approval:
 
 ```bash
 # Install dependencies
@@ -194,12 +194,12 @@ sequenceDiagram
     Client->>Facilitator: Verify + Settle
     
     rect rgb(255, 245, 230)
-        Note over Facilitator: Fee Collection
+        Note over Facilitator: PRE-SETTLEMENT Fee Collection
         Facilitator->>Merchant: transferFrom(merchant, treasury, $0.01)
     end
     
     rect rgb(230, 245, 255)
-        Note over Facilitator,Merchant: Settlement
+        Note over Facilitator,Merchant: Settlement (AFTER Fee)
         Facilitator->>Merchant: Client → Merchant ($0.02)
     end
     
@@ -207,10 +207,12 @@ sequenceDiagram
 ```
 
 **Key Points:**
-- ✅ Client authorizes payment to **YOUR address** ($0.02)
+- ✅ Facilitator collects $0.01 fee from merchant's approved balance **FIRST**
+- ✅ **Then** executes customer → merchant payment ($0.02)
+- ✅ Client authorizes payment to **YOUR address**
 - ✅ You receive 100% of customer payment
-- ✅ Facilitator collects $0.01 fee from your approved balance
 - ✅ No facilitator custody of customer funds
+- ⚠️ **If fee collection fails, settlement is blocked** (no free rides)
 
 ---
 
@@ -273,7 +275,7 @@ Expected flow:
 ✅ Server returns 402 with YOUR address
 ✅ Client authorizes payment to YOUR address
 ✅ Facilitator verifies authorization
-✅ Facilitator collects $0.01 from YOUR approved balance
+✅ Facilitator collects $0.01 from YOUR approved balance (PRE-SETTLEMENT)
 ✅ Facilitator settles: Client → YOU ($0.02)
 ✅ Server returns 200 + weather data
 ```
@@ -360,6 +362,7 @@ NETWORK=mainnet node approve-facilitator.mjs
   <Accordion title="Settlement fails">
     **Causes:**
     - Insufficient USDC balance for fees
+    - Insufficient allowance
     - Authorization expired
     - Nonce already used
     
@@ -377,7 +380,7 @@ NETWORK=mainnet node approve-facilitator.mjs
   </Card>
   
   <Card title="Architecture" icon="diagram-project" href="/architecture">
-    Understand fee collection
+    Understand pre-settlement fee collection
   </Card>
   
   <Card title="x402 Integration" icon="plug" href="/x402-integration">

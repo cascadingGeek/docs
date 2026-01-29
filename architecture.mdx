@@ -1,21 +1,21 @@
 ---
-title: "Post-Settlement Fee Collection"
-description: "Understanding 0xmeta's trust-minimized payment architecture"
+title: "Pre-Settlement Fee Collection"
+description: "Understanding 0xmeta's trust-minimized payment architecture with pre-settlement fee collection"
 ---
 
 ## Overview
 
-0xmeta uses **post-settlement fee collection** to maintain x402's core principle: **trust minimization**. Customer funds flow directly to merchants—never through the facilitator. Fees are collected separately via standard ERC-20 approval patterns.
+0xmeta uses **pre-settlement fee collection** to maintain x402's core principle: **trust minimization**. Customer funds flow directly to merchants—never through the facilitator. Fees are collected **before settlement** via standard ERC-20 approval patterns.
 
 <Note>
-**Trust-Minimized:** Customer payments go DIRECTLY to merchants. The facilitator never touches customer funds and cannot redirect payments.
+**Trust-Minimized with Pre-Settlement:** Customer payments go DIRECTLY to merchants. The facilitator collects the $0.01 fee from the merchant's pre-approved balance BEFORE executing the settlement. If fee collection fails, settlement is blocked.
 </Note>
 
 ---
 
 ## Payment Architecture
 
-### Trust-Minimized Flow
+### Trust-Minimized Flow with Pre-Settlement Fee Collection
 
 ```mermaid
 sequenceDiagram
@@ -39,13 +39,13 @@ sequenceDiagram
     Client->>Facilitator: 5. Settle payment
     
     rect rgb(255, 245, 230)
-        Note over Facilitator,Treasury: FEE COLLECTION (Pre-Settlement)
+        Note over Facilitator,Treasury: PRE-SETTLEMENT Fee Collection
         Facilitator->>Treasury: transferFrom(merchant, treasury, $0.01)
         Treasury-->>Facilitator: ✅ Fee collected
     end
     
     rect rgb(230, 245, 255)
-        Note over Facilitator,Merchant: SETTLEMENT (Via 1Shot API)
+        Note over Facilitator,Merchant: Settlement (AFTER Fee)
         Facilitator->>Merchant: transferWithAuthorization<br/>(client → merchant, $0.02)
         Merchant-->>Facilitator: ✅ Payment received
     end
@@ -54,7 +54,7 @@ sequenceDiagram
     Client->>Merchant: 6. Access resource
 ```
 
-**Key Principle:** Customer funds (blue) go DIRECTLY to merchant. Fee (orange) collected separately from merchant's pre-approved balance.
+**Key Principle:** Fee collected FIRST (orange), then customer payment executes (blue). Customer funds go DIRECTLY to merchant. No fee = no settlement.
 
 ---
 
@@ -73,21 +73,38 @@ sequenceDiagram
 
 **Current approach (APPROVED):**
 ```
-✅ Client → Merchant (direct payment)
-✅ Merchant → Treasury (fee only, via approval)
+✅ Fee: Merchant → Treasury (FIRST, via transferFrom)
+✅ Payment: Client → Merchant (THEN, direct payment)
    Solution: No facilitator custody = trust-minimized
+   Guarantee: No fee collection = no settlement
 ```
+
+### Pre-Settlement Enforcement
+
+**Why collect fee BEFORE settlement?**
+
+1. **Prevents free service:** Merchants cannot exploit failed settlements
+2. **Guarantees payment:** Facilitator only executes if paid
+3. **Atomic guarantee:** Fee collection failure blocks settlement
+4. **Economic sustainability:** Every settlement attempt costs merchant
+
+**Trade-off:** Merchant pays $0.01 even if settlement fails after fee collection.
+
+**Rationale:** This is payment for the verification and settlement attempt service. Without this, merchants could intentionally cause settlement failures for free verification.
 
 ### ERC-20 Approval Pattern
 
 Standard pattern used across DeFi:
 
 ```solidity
-// Merchant approves facilitator (one-time)
+// Merchant approves facilitator treasury (one-time)
 USDC.approve(facilitatorTreasury, 100 * 10^6); // 100 USDC
 
-// Later, facilitator collects fee
+// Before each settlement, facilitator collects fee FIRST
 USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
+
+// Then (and only then) executes customer payment
+transferWithAuthorization(...);
 ```
 
 **Benefits:**
@@ -95,6 +112,7 @@ USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
 - ✅ Merchant controls via approval amount
 - ✅ Auditable on-chain
 - ✅ Can revoke anytime (settlements will fail)
+- ✅ Fee collection happens first (no free rides)
 
 ---
 
@@ -182,9 +200,9 @@ assert authorization['value'] == expected_amount, "Amount mismatch"
 # Return verification_id
 ```
 
-### Step 6: Fee Collection (Pre-Settlement)
+### Step 6: Pre-Settlement Fee Collection
 
-**Before executing customer payment**, facilitator collects fee:
+**BEFORE executing customer payment**, facilitator collects fee:
 
 ```python
 # Check merchant allowance
@@ -197,7 +215,7 @@ if allowance < required:
         f"Run: node approve-facilitator.mjs"
     )
 
-# Collect fee
+# Collect fee FIRST (pre-settlement)
 fee_tx = usdc.transferFrom(
     from_=merchant,
     to=treasury,
@@ -207,18 +225,20 @@ fee_tx = usdc.transferFrom(
 # Wait for confirmation
 receipt = wait_for_transaction(fee_tx)
 assert receipt.status == 1, "Fee collection failed"
+
+# Fee collection successful - proceed to settlement
 ```
 
-**If fee collection fails, settlement is blocked.**
+**Critical:** If fee collection fails at this step, settlement is blocked. Customer is NOT charged.
 
 This guarantees the facilitator never provides free service.
 
-### Step 7: Settlement Execution
+### Step 7: Settlement Execution (After Fee)
 
-After fee collected, execute customer → merchant payment:
+After fee successfully collected, execute customer → merchant payment:
 
 ```python
-# Execute via 1Shot API
+# Execute via 1Shot API (only if fee was collected)
 settlement_response = oneshot_api.execute_settlement(
     authorization=authorization,
     signature=signature
@@ -244,6 +264,11 @@ settlement_response = oneshot_api.execute_settlement(
 - Exact fee amount known upfront ($0.01)
 - On-chain auditable
 
+✅ **Pre-settlement enforcement**
+- Fee collected BEFORE settlement executes
+- No fee = no settlement (guaranteed)
+- Prevents free service exploitation
+
 ✅ **No custody risk**
 - Facilitator never holds customer funds
 - Settlement executes customer → merchant directly
@@ -258,6 +283,9 @@ settlement_response = oneshot_api.execute_settlement(
 
 ❌ **Arbitrary fund movement**
 - Approval limits what facilitator can collect
+
+❌ **Settlement execution without payment**
+- Pre-settlement fee collection guarantees payment
 
 ---
 
@@ -284,32 +312,57 @@ settlement_response = oneshot_api.execute_settlement(
 | Facilitator drains entire USDC balance | ❌ Impossible - only approved amount accessible |
 | Facilitator collects more than $0.01 | ❌ Blocked by smart contract (exact amount hardcoded) |
 | Facilitator redirects customer funds | ❌ Impossible - EIP-3009 signature bound to merchant |
-| Merchant has insufficient approval | ✅ Settlement fails, customer not charged |
+| Merchant has insufficient approval | ✅ Settlement blocked, customer not charged |
+| Settlement fails after fee collection | ⚠️ Merchant paid for attempt (prevents free service) |
 
 ### Settlement Atomicity
 
 **Pre-settlement fee collection ensures:**
 
 1. Fee collected FIRST
-2. If fee fails → settlement blocked
-3. If settlement fails → fee already collected (payment for attempt)
+2. If fee fails → settlement blocked, customer not charged
+3. If settlement fails → fee already collected (payment for service)
+
+**Critical difference from post-settlement:**
+- **Pre-settlement:** Fee collection failure = no settlement = customer safe
+- **Post-settlement (rejected):** Settlement could succeed but fee fail = free service
 
 **Trade-off:** Merchant pays fee even if settlement fails after fee collection.
 
-**Rationale:** Prevents free service exploitation. Merchants can monitor and reduce approval if concerned.
+**Economic justification:** Merchant received verification and settlement attempt services worth $0.01. This prevents exploitation via intentional settlement failures.
 
 ---
 
-## Comparison: Old vs New
+## Comparison: Pre-Settlement vs Post-Settlement
 
-| Aspect | Treasury-First (Old) | Post-Settlement (New) |
-|--------|---------------------|---------------------|
+| Aspect | Pre-Settlement (Current) | Post-Settlement (Rejected) |
+|--------|-------------------------|---------------------------|
+| **Fee collection timing** | BEFORE settlement ✅ | AFTER settlement |
+| **Free service risk** | Zero (fee first) ✅ | High (could fail fee collection) |
+| **Customer protection** | High (no fee = no charge) ✅ | Lower (could be charged with failed fee) |
+| **Merchant risk** | Pays for attempt | Lower fee risk |
+| **Economic sustainability** | Guaranteed ✅ | Exploitable |
+| **Trust minimization** | Maintained ✅ | Maintained |
+
+**Why pre-settlement wins:**
+1. Prevents free service exploitation
+2. Guarantees facilitator payment
+3. Customer never charged if fee collection fails
+4. Economically sustainable business model
+
+---
+
+## Comparison: Old vs Current Architecture
+
+| Aspect | Treasury-First (Old) | Pre-Settlement (Current) |
+|--------|---------------------|--------------------------|
 | **Customer payment** | → Treasury → Merchant | → Merchant (direct) ✅ |
-| **Fee collection** | Atomic split | Post-settlement via transferFrom ✅ |
+| **Fee collection** | Atomic split | Pre-settlement via transferFrom ✅ |
 | **Trust required** | High (custody) | Minimal (approval only) ✅ |
 | **x402 compliant** | ❌ No | ✅ Yes |
 | **Merchant setup** | None | One-time approval |
 | **Revocability** | Not applicable | Standard ERC-20 revoke ✅ |
+| **Free service risk** | N/A | Eliminated ✅ |
 
 ---
 
@@ -327,10 +380,12 @@ Gas cost: ~50,000 gas (~$0.50 on Base)
 ```
 1. Facilitator → USDC.transferFrom(merchant, treasury, $0.01)
    Gas: Paid by facilitator
+   Timing: BEFORE settlement (pre-settlement)
    
 2. Facilitator → 1Shot.executeSettlement(authorization, signature)
    Result: Client → Merchant ($0.02)
    Gas: Paid by 1Shot
+   Timing: AFTER fee collection
 ```
 
 **Total merchant gas cost: $0** (after initial approval)
@@ -352,15 +407,16 @@ Gas cost: ~50,000 gas (~$0.50 on Base)
 }
 ```
 
-**Fee Collection Failed:**
+**Fee Collection Failed (Pre-Settlement):**
 ```json
 {
   "error": {
     "code": "fee_collection_failed",
-    "message": "Could not collect $0.01 fee from merchant",
+    "message": "Could not collect $0.01 fee from merchant before settlement",
     "details": {
       "reason": "Insufficient USDC balance",
-      "merchant_balance": "0"
+      "merchant_balance": "0",
+      "note": "Settlement blocked - customer not charged"
     }
   }
 }
@@ -370,7 +426,17 @@ Gas cost: ~50,000 gas (~$0.50 on Base)
 
 ## Alternatives Considered
 
-### 1. Smart Contract Atomic Split
+### 1. Post-Settlement Fee Collection
+
+Collect fee AFTER executing customer → merchant payment.
+
+**Why rejected:**
+- ❌ Merchants can exploit failed fee collection for free service
+- ❌ Race condition between settlement and fee collection
+- ❌ Customer could be charged even if fee collection fails
+- ❌ Economically unsustainable (free service exploitation)
+
+### 2. Smart Contract Atomic Split
 
 ```solidity
 contract AtomicSplit {
@@ -391,7 +457,7 @@ contract AtomicSplit {
 - ❌ Still requires customer to authorize contract (not direct to merchant)
 - ❌ Violates trust-minimization (contract has custody)
 
-### 2. Merchant Voluntary Fee Payment
+### 3. Merchant Voluntary Fee Payment
 
 Merchant manually pays fees after receiving customer payment.
 
@@ -400,9 +466,9 @@ Merchant manually pays fees after receiving customer payment.
 - ❌ No enforcement mechanism
 - ❌ Unsustainable business model
 
-### 3. Treasury-First (Original)
+### 4. Treasury-First (Original)
 
-See [discussion above](#comparison-old-vs-new).
+See [comparison above](#comparison-old-vs-current-architecture).
 
 **Why rejected:**
 - ❌ Violates x402 trust-minimization
@@ -446,7 +512,7 @@ To stop allowing settlements:
 APPROVAL_AMOUNT=0 node approve-facilitator.mjs
 ```
 
-**Effect:** All future settlements will fail with `insufficient_allowance` error.
+**Effect:** All future settlements will fail with `insufficient_allowance` error at the pre-settlement fee collection step.
 
 ---
 
@@ -458,7 +524,7 @@ APPROVAL_AMOUNT=0 node approve-facilitator.mjs
     
     **Avoid:** Infinite approval (max uint256)
     
-    **Why:** Limits exposure if facilitator compromised
+    **Why:** Limits exposure if facilitator compromised. With pre-settlement, you only risk the approved amount.
   </Accordion>
 
   <Accordion title="Monitor Allowance">
@@ -485,6 +551,8 @@ APPROVAL_AMOUNT=0 node approve-facilitator.mjs
     
     - Minimum: 1 USDC (100 settlements)
     - Recommended: Match approval amount
+    
+    Pre-settlement means fee is collected BEFORE settlement, so you need sufficient balance.
   </Accordion>
 </AccordionGroup>
 
@@ -493,32 +561,71 @@ APPROVAL_AMOUNT=0 node approve-facilitator.mjs
 ## FAQ
 
 <AccordionGroup>
-  <Accordion title="Why not collect fee from customer?">
-    **Technical:** EIP-3009 signatures are bound to exact recipient and amount. Can't split payment atomically.
+  <Accordion title="Why collect fee BEFORE settlement instead of after?">
+    **Economic security:** Pre-settlement prevents free service exploitation.
     
-    **Principle:** x402 requires customer pays merchant directly (trust-minimization).
+    **Without pre-settlement:** Merchants could:
+    1. Receive customer payment
+    2. Intentionally cause fee collection to fail
+    3. Get free verification/settlement service
     
-    **Solution:** Merchant pays facilitator fee separately (standard approval pattern).
+    **With pre-settlement:** Fee collected first = no free rides.
+    
+    **Trade-off:** Merchant pays $0.01 even if settlement fails after fee. This is payment for the service attempt.
   </Accordion>
 
-  <Accordion title="What if I revoke approval mid-settlement?">
-    Settlement will fail with `insufficient_allowance` error. Customer won't be charged.
+  <Accordion title="What if settlement fails after fee collection?">
+    **You paid $0.01 for the settlement attempt.**
+    
+    **Why this is fair:**
+    - Facilitator provided verification service
+    - Facilitator attempted settlement
+    - Resources were consumed
+    - Service was rendered
+    
+    **Prevents exploitation:** Without charging for attempts, merchants could intentionally fail settlements for free verification.
+    
+    **Mitigation:** Test thoroughly on Sepolia testnet before production.
   </Accordion>
 
   <Accordion title="Can facilitator drain my USDC balance?">
-    **No.** Facilitator can only access approved amount. Approve 100 USDC → max loss is 100 USDC.
+    **No.** Only the approved amount is accessible. Pre-settlement doesn't change this.
+    
+    - Approve 100 USDC → max risk is 100 USDC
+    - Your remaining USDC: Safe
   </Accordion>
 
-  <Accordion title="What if settlement fails after fee collected?">
-    You paid $0.01 for the settlement attempt. Facilitator keeps fee (payment for service rendered).
+  <Accordion title="What happens if I have insufficient USDC for the fee?">
+    **Settlement is blocked at pre-settlement fee collection step.**
     
-    **Why:** Prevents free service exploitation via intentional settlement failures.
+    Flow:
+    1. Customer submits payment authorization
+    2. Facilitator attempts fee collection
+    3. Fee collection fails (insufficient balance)
+    4. Settlement NEVER executes
+    5. Customer NOT charged
+    
+    Error: `fee_collection_failed - Settlement blocked`
   </Accordion>
 
-  <Accordion title="How is this different from Stripe?">
-    **Stripe:** Holds customer funds, takes 2.9% + $0.30 (custody model)
+  <Accordion title="How is pre-settlement different from post-settlement?">
+    **Timing and guarantees:**
     
-    **0xmeta:** Direct customer → merchant, $0.01 fee via approval (trust-minimized)
+    **Pre-settlement (current):**
+    ```
+    1. Collect $0.01 from merchant
+    2. IF successful → Execute customer → merchant
+    3. IF failed → Block settlement, customer safe
+    ```
+    
+    **Post-settlement (rejected):**
+    ```
+    1. Execute customer → merchant
+    2. TRY to collect $0.01 from merchant
+    3. IF failed → Merchant got free service
+    ```
+    
+    Pre-settlement eliminates free service risk.
   </Accordion>
 </AccordionGroup>
 
@@ -545,5 +652,5 @@ APPROVAL_AMOUNT=0 node approve-facilitator.mjs
 </CardGroup>
 
 <Check>
-**Trust-Minimized:** Customer funds go DIRECTLY to merchants. Facilitator collects fee separately via standard ERC-20 approval. No custody, no redirection, fully auditable.
+**Trust-Minimized with Pre-Settlement:** Customer funds go DIRECTLY to merchants. Facilitator collects $0.01 fee BEFORE settlement. If fee collection fails, settlement is blocked and customer is never charged. No free rides, fully auditable.
 </Check>

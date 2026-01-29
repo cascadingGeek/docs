@@ -1,6 +1,6 @@
 ---
 title: "FAQ"
-description: "Frequently asked questions about 0xmeta facilitator"
+description: "Frequently asked questions about 0xmeta facilitator with pre-settlement fee collection"
 ---
 
 ## General Questions
@@ -36,21 +36,24 @@ description: "Frequently asked questions about 0xmeta facilitator"
 
 <AccordionGroup>
   <Accordion title="Why do I need to approve the facilitator?">
-    **Technical reason:** The facilitator collects a $0.01 fee per settlement from your USDC balance using the standard ERC-20 `transferFrom` pattern.
+    **Technical reason:** The facilitator collects a $0.01 fee per settlement from your USDC balance using the standard ERC-20 `transferFrom` pattern **before** executing the settlement.
     
     **How it works:**
     ```solidity
     // You approve facilitator (one-time)
     USDC.approve(treasury, 100 * 10^6); // 100 USDC
     
-    // Later, facilitator collects fee per settlement
+    // Before each settlement, facilitator collects fee FIRST
     USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
+    
+    // Then executes customer → merchant payment
     ```
     
     **Why this pattern:**
     - x402 requires customers pay merchants directly (trust-minimization)
     - Facilitator can't split customer payments
-    - Solution: Merchant pays fee separately via approval
+    - Pre-settlement fee collection prevents free service exploitation
+    - Solution: Merchant pays fee separately via approval, BEFORE settlement
   </Accordion>
 
   <Accordion title="How do I approve the facilitator?">
@@ -91,7 +94,7 @@ description: "Frequently asked questions about 0xmeta facilitator"
     APPROVAL_AMOUNT=0 node approve-facilitator.mjs
     ```
     
-    **Effect:** All future settlements will fail with `insufficient_allowance` error. Customers won't be charged.
+    **Effect:** All future settlements will fail at the pre-settlement fee collection step with `insufficient_allowance` error. Customers won't be charged.
     
     To resume: Re-run approval with desired amount.
   </Accordion>
@@ -153,6 +156,8 @@ description: "Frequently asked questions about 0xmeta facilitator"
     - Maximum risk: 100 USDC
     - Your remaining USDC: Safe
     
+    **Pre-settlement protection:** Fee collected BEFORE settlement. If you have insufficient balance, settlement is blocked and customer isn't charged.
+    
     **Best practice:** Approve reasonable amounts (100-1000 USDC), not infinite.
     
     **Monitoring:** Use `check-allowance.mjs` to track remaining approval.
@@ -167,21 +172,24 @@ description: "Frequently asked questions about 0xmeta facilitator"
     3. **Revoke if suspicious:** Set approval to 0 immediately
     
     **Your customer funds:** Always safe (facilitator has no access).
+    
+    **Pre-settlement benefit:** Attacker can only collect fees for settlement attempts, not steal customer funds.
   </Accordion>
 
   <Accordion title="Is this more secure than traditional payment processors?">
     **Yes, in several ways:**
     
-    **Traditional (Stripe, PayPal):**
+    **Traditional:**
     - ❌ Custody of customer funds
     - ❌ Can freeze/hold payments
     - ❌ Opaque settlement process
     
-    **0xmeta (x402):**
+    **0xmeta (x402 with pre-settlement):**
     - ✅ No custody (direct to merchant)
     - ✅ Cannot freeze payments
     - ✅ On-chain auditable
     - ✅ Cryptographic guarantees
+    - ✅ Fee collected before settlement (no free service)
     
     **Trade-off:** Requires blockchain familiarity and USDC approval.
   </Accordion>
@@ -193,47 +201,58 @@ description: "Frequently asked questions about 0xmeta facilitator"
 
 <AccordionGroup>
   <Accordion title="How are fees collected?">
-    **Post-settlement via transferFrom:**
+    **Pre-settlement via transferFrom:**
     
     **Flow:**
     1. Customer authorizes $0.02 to your address
-    2. You receive 100% of customer payment ($0.02)
-    3. Facilitator collects $0.01 fee from your approved USDC balance
+    2. **Facilitator collects $0.01 fee from your approved USDC balance FIRST**
+    3. **Then** facilitator executes customer → merchant payment ($0.02)
+    4. You receive 100% of customer payment ($0.02)
     
     **Technical:**
     ```solidity
-    // Step 1: Customer → Merchant (direct)
-    transferWithAuthorization(customer, merchant, 20000); // $0.02
-    
-    // Step 2: Facilitator collects fee from merchant
+    // Step 1: Collect fee from merchant FIRST (pre-settlement)
     transferFrom(merchant, treasury, 10000); // $0.01
+    
+    // Step 2: Execute customer → merchant (AFTER fee)
+    transferWithAuthorization(customer, merchant, 20000); // $0.02
     ```
+    
+    **Key:** No fee collection = no settlement. This prevents free service.
   </Accordion>
 
   <Accordion title="Why does the merchant pay the fee, not the customer?">
     **Technical constraint:** x402 requires customer payments go directly to merchants (trust-minimization). EIP-3009 signatures are cryptographically bound to exact recipient and amount. Cannot split customer payment.
     
-    **Solution:** Merchant pays facilitator fee separately via standard ERC-20 approval.
+    **Solution:** Merchant pays facilitator fee separately via standard ERC-20 approval, collected **before** settlement execution.
     
     **Merchant pricing:** Add fee to your prices:
     - Your price: $0.01
     - Facilitator fee: $0.01
     - Customer pays: $0.02
+    
+    **Economic protection:** Pre-settlement collection ensures merchant pays for service.
   </Accordion>
 
   <Accordion title="What if settlement fails after fee collection?">
     **You paid $0.01 for the settlement attempt.**
     
-    **Why:** Prevents free service exploitation. If facilitator provided verification/settlement attempt without charging, merchants could intentionally cause failures for free service.
+    **Why this is fair:**
+    - Facilitator verified customer authorization
+    - Facilitator attempted settlement execution
+    - Resources were consumed (RPC calls, API calls, gas estimation)
+    - Service was rendered
     
-    **Mitigation:** Test on Base Sepolia first, monitor settlement success rates.
+    **Why pre-settlement:** Without collecting fee first, merchants could intentionally cause settlement failures to get free verification service. Pre-settlement prevents this exploitation.
+    
+    **Mitigation:** Test thoroughly on Base Sepolia testnet before production. Monitor settlement success rates.
   </Accordion>
 
   <Accordion title="Are there any hidden fees?">
     **No.**
     
     **What you pay:**
-    - $0.01 USDC per successful settlement
+    - $0.01 USDC per settlement (collected pre-settlement)
     
     **What you DON'T pay:**
     - ❌ Monthly fees
@@ -242,6 +261,8 @@ description: "Frequently asked questions about 0xmeta facilitator"
     - ❌ Withdrawal fees
     - ❌ Percentage fees
     - ❌ Minimum volume requirements
+    
+    **Transparency:** Every fee collection is an on-chain transaction you can verify.
   </Accordion>
 </AccordionGroup>
 
@@ -251,13 +272,13 @@ description: "Frequently asked questions about 0xmeta facilitator"
 
 <AccordionGroup>
   <Accordion title="What happens if I revoke approval mid-settlement?">
-    **Settlement fails gracefully.**
+    **Settlement fails at pre-settlement fee collection step.**
     
     **Flow:**
     1. Customer submits payment authorization
-    2. Facilitator attempts fee collection
+    2. Facilitator attempts fee collection (pre-settlement)
     3. Fee collection fails (approval revoked)
-    4. Settlement blocked
+    4. Settlement BLOCKED
     5. Customer NOT charged
     
     **Error response:**
@@ -265,10 +286,15 @@ description: "Frequently asked questions about 0xmeta facilitator"
     {
       "error": {
         "code": "insufficient_allowance",
-        "message": "Merchant must approve facilitator"
+        "message": "Merchant must approve facilitator",
+        "details": {
+          "note": "Settlement blocked - customer not charged"
+        }
       }
     }
     ```
+    
+    **Customer protection:** Pre-settlement means if fee collection fails, settlement never executes.
   </Accordion>
 
   <Accordion title="Can I use a different token besides USDC?">
@@ -296,6 +322,8 @@ description: "Frequently asked questions about 0xmeta facilitator"
     **Testnet addresses:**
     - USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
     - Treasury: `0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B`
+    
+    **Recommendation:** Thoroughly test pre-settlement fee collection on Sepolia before mainnet.
   </Accordion>
 
   <Accordion title="What's the difference between x402 v1 and v2?">
@@ -305,16 +333,20 @@ description: "Frequently asked questions about 0xmeta facilitator"
     
     **Both supported!** Use v2 for new integrations.
     
+    **Pre-settlement works the same in both versions.**
+    
     **Migration:** See [x402 Integration Guide](/x402-integration#migration-v1-v2)
   </Accordion>
 
   <Accordion title="How long do settlements take?">
     **Typical timing:**
     - Verification: < 2 seconds
-    - Fee collection: 5-10 seconds (on-chain tx)
+    - **Pre-settlement fee collection: 5-10 seconds** (on-chain tx)
     - Settlement execution: 30-60 seconds (via 1Shot)
     
     **Total:** 35-70 seconds average
+    
+    **Key:** Fee collection happens FIRST, then settlement. If fee collection fails, settlement never starts.
     
     **Factors:**
     - Network congestion
@@ -325,12 +357,12 @@ description: "Frequently asked questions about 0xmeta facilitator"
   <Accordion title="Can I see all transactions on-chain?">
     **Yes!** All transactions are public.
     
-    **Fee collection:**
+    **Pre-settlement fee collection:**
     ```
     https://basescan.org/tx/{fee_tx_hash}
     ```
     
-    **Settlement:**
+    **Settlement (after fee):**
     ```
     https://basescan.org/tx/{settlement_tx_hash}
     ```
@@ -339,6 +371,26 @@ description: "Frequently asked questions about 0xmeta facilitator"
     ```
     https://basescan.org/address/{your_merchant_address}
     ```
+    
+    **Verification:** You can verify fee was collected BEFORE settlement execution by comparing timestamps.
+  </Accordion>
+
+  <Accordion title="Why pre-settlement instead of post-settlement?">
+    **Economic security and sustainability:**
+    
+    **Pre-settlement (current):**
+    - ✅ Fee collected FIRST
+    - ✅ If fee fails → settlement blocked → customer safe
+    - ✅ No free service exploitation
+    - ✅ Sustainable business model
+    
+    **Post-settlement (rejected):**
+    - ❌ Settlement executes first
+    - ❌ Fee collection could fail → free service
+    - ❌ Merchants could exploit for free verification
+    - ❌ Unsustainable
+    
+    **Trade-off:** Merchant pays $0.01 even if settlement fails after fee. This is fair payment for the attempt.
   </Accordion>
 </AccordionGroup>
 
@@ -358,10 +410,12 @@ description: "Frequently asked questions about 0xmeta facilitator"
     # If low/zero, approve more
     node approve-facilitator.mjs
     ```
+    
+    **Pre-settlement:** This error occurs at fee collection step, BEFORE settlement. Customer is not charged.
   </Accordion>
 
   <Accordion title="Error: fee_collection_failed">
-    **Cause:** Your USDC balance is insufficient.
+    **Cause:** Your USDC balance is insufficient for the $0.01 fee.
     
     **Solution:** Add USDC to your merchant address.
     
@@ -370,21 +424,26 @@ description: "Frequently asked questions about 0xmeta facilitator"
     node check-allowance.mjs
     # Shows: USDC Balance: 0.00 USDC ← Problem
     ```
+    
+    **Critical:** This is a pre-settlement error. Settlement never executed, customer not charged.
   </Accordion>
 
   <Accordion title="Settlement taking too long">
     **Normal:** 35-70 seconds
     
     **If longer:**
-    1. Check Base network status
-    2. Verify 1Shot API status
-    3. Check settlement status via API
+    1. Check if pre-settlement fee collection succeeded
+    2. Check Base network status
+    3. Verify 1Shot API status
+    4. Check settlement status via API
     
     **Polling:**
     ```javascript
     const status = await checkSettlement(settlement_id);
     // status: "pending" | "settled" | "failed"
     ```
+    
+    **Note:** Fee is collected in first 5-10 seconds. Remaining time is settlement execution.
   </Accordion>
 
   <Accordion title="How do I get support?">
@@ -399,6 +458,7 @@ description: "Frequently asked questions about 0xmeta facilitator"
     - Settlement ID or verification ID
     - Error message (if applicable)
     - Network (mainnet or sepolia)
+    - Whether error occurred at fee collection or settlement
   </Accordion>
 </AccordionGroup>
 
@@ -407,35 +467,22 @@ description: "Frequently asked questions about 0xmeta facilitator"
 ## Comparison to Alternatives
 
 <AccordionGroup>
-  <Accordion title="How is this different from Stripe?">
-    | Feature | 0xmeta | Stripe |
-    |---------|--------|--------|
-    | **Fee** | $0.01 flat | 2.9% + $0.30 |
-    | **Custody** | None | Full custody |
-    | **Settlement** | 35-70 seconds | 2-7 days |
-    | **Setup** | 1 approval tx | KYC + business verification |
-    | **Trust** | Cryptographic | Company reputation |
-    | **Refunds** | Not applicable (blockchain) | Supported |
-    | **Chargebacks** | Impossible | Supported |
-    
-    **Best for:**
-    - **0xmeta:** Micropayments, crypto-native users, no KYC
-    - **Stripe:** Traditional commerce, fiat users, chargebacks needed
-  </Accordion>
 
   <Accordion title="How is this different from other x402 facilitators?">
     **0xmeta:**
-    - ✅ Paid service ($0.01/settlement)
+    - ✅ Paid service ($0.01/settlement, pre-settlement)
     - ✅ Production-ready infrastructure
     - ✅ Guaranteed uptime (99.9% SLA)
     - ✅ Professional support
+    - ✅ No free service exploitation (pre-settlement)
     
     **Free facilitators:**
     - ⚠️ May shut down anytime
     - ⚠️ No guarantees
     - ⚠️ Limited support
+    - ⚠️ May use post-settlement (exploitable)
     
-    **Trade-off:** Pay for reliability vs. free but uncertain.
+    **Trade-off:** Pay for reliability and economic sustainability vs. free but uncertain.
   </Accordion>
 
   <Accordion title="Why use a facilitator at all?">
@@ -452,8 +499,70 @@ description: "Frequently asked questions about 0xmeta facilitator"
     - ✅ Gas fees covered
     - ✅ Error handling built-in
     - ✅ Simple integration (x402 middleware)
+    - ✅ Pre-settlement fee collection (no free service)
     
-    **Cost:** $0.01 per settlement for all infrastructure.
+    **Cost:** $0.01 per settlement for all infrastructure, collected pre-settlement.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Pre-Settlement Deep Dive
+
+<AccordionGroup>
+  <Accordion title="What exactly is pre-settlement fee collection?">
+    **Definition:** The facilitator collects the $0.01 fee from the merchant's approved USDC balance BEFORE executing the customer → merchant payment.
+    
+    **Order of operations:**
+    ```
+    1. Customer submits payment authorization
+    2. Facilitator verifies authorization
+    3. ✅ Facilitator collects $0.01 from merchant (pre-settlement)
+    4. ✅ Facilitator executes customer → merchant payment
+    ```
+    
+    **Critical:** If step 3 fails, step 4 never happens. Customer is never charged.
+  </Accordion>
+
+  <Accordion title="What are the benefits of pre-settlement?">
+    **For customers:**
+    - ✅ Never charged if fee collection fails
+    - ✅ Protected from failed settlement attempts
+    
+    **For facilitator:**
+    - ✅ Guaranteed payment for service
+    - ✅ No free service exploitation
+    - ✅ Sustainable business model
+    
+    **For merchants:**
+    - ✅ Transparent fee structure
+    - ✅ Predictable costs
+    - ⚠️ Pay for settlement attempts (fair trade for preventing exploitation)
+  </Accordion>
+
+  <Accordion title="What happens in each scenario?">
+    **Scenario 1: Everything succeeds**
+    ```
+    1. Fee collection: ✅ Success ($0.01 from merchant)
+    2. Settlement: ✅ Success ($0.02 to merchant from customer)
+    Result: Merchant pays $0.01, receives $0.02, net +$0.01
+    ```
+    
+    **Scenario 2: Fee collection fails**
+    ```
+    1. Fee collection: ❌ Failed (insufficient allowance/balance)
+    2. Settlement: 🚫 Blocked (never attempted)
+    Result: Customer not charged, merchant not charged
+    ```
+    
+    **Scenario 3: Fee succeeds, settlement fails**
+    ```
+    1. Fee collection: ✅ Success ($0.01 from merchant)
+    2. Settlement: ❌ Failed (expired authorization, etc.)
+    Result: Merchant pays $0.01 for the attempt, customer not charged
+    ```
+    
+    **Why scenario 3 is fair:** Merchant received verification and settlement attempt services worth $0.01.
   </Accordion>
 </AccordionGroup>
 
@@ -476,4 +585,6 @@ npm start
 
 <Info>
 **Questions not answered here?** Check the [x402 Integration Guide](/x402-integration) or contact support@0xmeta.ai
+
+**Remember:** Pre-settlement fee collection means the $0.01 fee is collected BEFORE executing the customer payment. This protects customers and prevents free service exploitation.
 </Info>

@@ -1,14 +1,14 @@
 ---
 title: "x402 Integration Guide"
-description: "Complete guide for integrating x402 v1 and v2 with 0xmeta facilitator"
+description: "Complete guide for integrating x402 v1 and v2 with 0xmeta facilitator using pre-settlement fee collection"
 ---
 
 ## Overview 
 
-0xmeta supports both **x402 v1** (legacy) and **x402 v2** (current) protocols with **post-settlement fee collection** to maintain trust-minimization.
+0xmeta supports both **x402 v1** (legacy) and **x402 v2** (current) protocols with **pre-settlement fee collection** to maintain trust-minimization and prevent free service exploitation.
 
 <Note>
-**Trust-Minimized:** Customer payments go DIRECTLY to your address. The $0.01 fee is collected separately from your pre-approved USDC balance.
+**Trust-Minimized with Pre-Settlement:** Customer payments go DIRECTLY to your address. The $0.01 fee is collected from your pre-approved USDC balance BEFORE the settlement executes. If fee collection fails, settlement is blocked and customer is never charged.
 </Note>
 
 ---
@@ -30,7 +30,7 @@ description: "Complete guide for integrating x402 v1 and v2 with 0xmeta facilita
     EVM_PRIVATE_KEY=0x... node approve-facilitator.mjs
     ```
     
-    Approves facilitator treasury to collect $0.01 fees from your USDC balance.
+    Approves facilitator treasury to collect $0.01 fees from your USDC balance BEFORE each settlement.
   </Step>
   
   <Step title="Configure Server">
@@ -52,7 +52,7 @@ description: "Complete guide for integrating x402 v1 and v2 with 0xmeta facilita
     npm start
     ```
     
-    Customers pay directly to your address. Facilitator collects fee from your approved balance.
+    Facilitator collects fee FIRST, then executes customer → merchant payment.
   </Step>
 </Steps>
 
@@ -76,18 +76,25 @@ sequenceDiagram
     
     Client->>Facilitator: 4. Verify + Settle
     
-    Facilitator->>Facilitator: 5. Collect $0.01 fee<br/>from merchant
+    rect rgb(255, 245, 230)
+        Note over Facilitator: PRE-SETTLEMENT Fee Collection
+        Facilitator->>Facilitator: 5. Collect $0.01 fee<br/>from merchant (FIRST)
+    end
     
-    Facilitator->>Merchant: 6. Execute settlement<br/>client → merchant
+    rect rgb(230, 245, 255)
+        Note over Facilitator,Merchant: Settlement (AFTER Fee)
+        Facilitator->>Merchant: 6. Execute settlement<br/>client → merchant
+    end
     
     Merchant-->>Client: 7. 200 OK + Resource
 ```
 
 **Key Points:**
-- ✅ Client pays DIRECTLY to merchant ($0.02)
+- ✅ Facilitator collects $0.01 fee from merchant FIRST (pre-settlement)
+- ✅ **Then** executes customer → merchant payment ($0.02)
+- ✅ Client pays DIRECTLY to merchant (no facilitator custody)
 - ✅ Merchant receives 100% of customer payment
-- ✅ Facilitator collects $0.01 fee from merchant's pre-approved balance
-- ✅ No facilitator custody of customer funds
+- ⚠️ **If fee collection fails, settlement is blocked** (customer not charged)
 
 ---
 
@@ -161,6 +168,7 @@ app.get("/weather", (req, res) => {
 
 app.listen(4021, () => {
   console.log(`🚀 Server listening at http://localhost:4021`);
+  console.log(`💰 Pre-settlement fee collection enabled`);
 });
 ```
 
@@ -255,6 +263,7 @@ app.get("/premium/content", (req, res) => {
 
 app.listen(4021, () => {
   console.log(`Server listening at http://localhost:4021`);
+  console.log(`💰 Pre-settlement fee collection enabled`);
 });
 ```
 
@@ -280,15 +289,18 @@ NETWORK=base
 
 ### Why Approval Is Required
 
-The facilitator collects a $0.01 fee per settlement from your USDC balance via `transferFrom`. This requires one-time approval.
+The facilitator collects a $0.01 fee per settlement from your USDC balance via `transferFrom` **BEFORE** executing the customer payment. This requires one-time approval.
 
 **Technical details:**
 ```solidity
-// You approve facilitator treasury
+// You approve facilitator treasury (one-time)
 USDC.approve(treasury, 100 * 10^6); // 100 USDC
 
-// Facilitator collects fee before settlement
+// Before each settlement, facilitator collects fee FIRST
 USDC.transferFrom(merchant, treasury, 0.01 * 10^6); // $0.01
+
+// Then (and only then) executes settlement
+transferWithAuthorization(...);
 ```
 
 ### approve-facilitator.mjs
@@ -344,7 +356,8 @@ async function approveFacilitator() {
   // Approve 100 USDC (10,000 settlements)
   const approvalAmount = ethers.parseUnits("100", 6);
   
-  console.log(`\n💰 Approving 100 USDC for fee collection...`);
+  console.log(`\n💰 Approving 100 USDC for pre-settlement fee collection...`);
+  console.log(`   ⚠️  Fee will be collected BEFORE each settlement`);
   
   const tx = await usdc.approve(OXMETA_TREASURY, approvalAmount);
   console.log(`   Transaction: ${tx.hash}`);
@@ -356,6 +369,7 @@ async function approveFacilitator() {
   const allowance = await usdc.allowance(merchant.address, OXMETA_TREASURY);
   console.log(`   Allowance: ${ethers.formatUnits(allowance, 6)} USDC`);
   console.log(`   Settlements: ~${Math.floor(Number(ethers.formatUnits(allowance, 6)) / 0.01)}`);
+  console.log(`\n   Note: $0.01 collected BEFORE each settlement execution`);
 }
 
 approveFacilitator().catch(console.error);
@@ -377,11 +391,14 @@ NETWORK=mainnet node approve-facilitator.mjs
    Merchant: 0xA821f428Ef8cC9f54A9915336A82220853059090
    Treasury: 0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B
 
-💰 Approving 100 USDC for fee collection...
+💰 Approving 100 USDC for pre-settlement fee collection...
+   ⚠️  Fee will be collected BEFORE each settlement
    Transaction: 0x123...
 ✅ Approval successful!
    Allowance: 100.0 USDC
    Settlements: ~10000
+
+   Note: $0.01 collected BEFORE each settlement execution
 ```
 
 ---
@@ -435,6 +452,7 @@ async function checkNetwork(networkKey, merchantAddress) {
   console.log(`   USDC Balance: ${balanceFormatted} USDC`);
   console.log(`   Fee Allowance: ${allowanceFormatted} USDC`);
   console.log(`   Settlements Remaining: ${settlements}`);
+  console.log(`   Fee Collection: PRE-SETTLEMENT`);
   
   if (settlements < 10) {
     console.log(`   ⚠️  Low - run: NETWORK=${networkKey} node approve-facilitator.mjs`);
@@ -442,6 +460,11 @@ async function checkNetwork(networkKey, merchantAddress) {
     console.log(`   ⚠️  Getting low`);
   } else {
     console.log(`   ✅ Good`);
+  }
+  
+  // Check if balance is sufficient for fees
+  if (Number(balanceFormatted) < Number(allowanceFormatted)) {
+    console.log(`   ⚠️  Warning: Balance < Allowance (pre-settlement will fail)`);
   }
 }
 
@@ -454,10 +477,11 @@ async function main() {
   }
   
   console.log("=".repeat(60));
-  console.log("0xmeta Facilitator Fee Allowance Check");
+  console.log("0xmeta Facilitator Pre-Settlement Fee Allowance Check");
   console.log("=".repeat(60));
   console.log(`\n👤 Merchant: ${merchantAddress}`);
   console.log(`🏦 Treasury: ${OXMETA_TREASURY}`);
+  console.log(`⏰ Fee Timing: PRE-SETTLEMENT (before customer payment)`);
   
   const networkArg = process.argv[2] || "both";
   
@@ -488,23 +512,26 @@ node check-allowance.mjs mainnet
 **Expected Output:**
 ```
 ============================================================
-0xmeta Facilitator Fee Allowance Check
+0xmeta Facilitator Pre-Settlement Fee Allowance Check
 ============================================================
 
 👤 Merchant: 0xA821f428Ef8cC9f54A9915336A82220853059090
 🏦 Treasury: 0x5D791e3554D0e83f171126905Bda1640Bf6f9A8B
+⏰ Fee Timing: PRE-SETTLEMENT (before customer payment)
 
 📍 Base Sepolia
    USDC Balance: 500.00 USDC
    Fee Allowance: 95.50 USDC
    Settlements Remaining: 9550
+   Fee Collection: PRE-SETTLEMENT
    ✅ Good
 
 📍 Base Mainnet
-   USDC Balance: 1000.00 USDC
-   Fee Allowance: 0.00 USDC
-   Settlements Remaining: 0
-   ⚠️  Low - run: NETWORK=mainnet node approve-facilitator.mjs
+   USDC Balance: 10.00 USDC
+   Fee Allowance: 100.00 USDC
+   Settlements Remaining: 10000
+   Fee Collection: PRE-SETTLEMENT
+   ⚠️  Warning: Balance < Allowance (pre-settlement will fail)
 
 ============================================================
 ```
@@ -537,7 +564,7 @@ node check-allowance.mjs mainnet
 
 ## Error Handling
 
-### Insufficient Allowance
+### Insufficient Allowance (Pre-Settlement)
 
 If merchant hasn't approved facilitator:
 
@@ -549,7 +576,9 @@ If merchant hasn't approved facilitator:
     "details": {
       "required": "10000",
       "available": "0",
-      "approval_command": "node approve-facilitator.mjs"
+      "approval_command": "node approve-facilitator.mjs",
+      "timing": "pre-settlement",
+      "impact": "Settlement blocked - customer not charged"
     }
   }
 }
@@ -560,7 +589,9 @@ If merchant hasn't approved facilitator:
 EVM_PRIVATE_KEY=0x... node approve-facilitator.mjs
 ```
 
-### Fee Collection Failed
+**Customer impact:** None - they are never charged when pre-settlement fee collection fails.
+
+### Fee Collection Failed (Pre-Settlement)
 
 If merchant has insufficient USDC balance:
 
@@ -568,15 +599,48 @@ If merchant has insufficient USDC balance:
 {
   "error": {
     "code": "fee_collection_failed",
-    "message": "Could not collect $0.01 fee from merchant",
+    "message": "Could not collect $0.01 fee from merchant before settlement",
     "details": {
-      "reason": "Insufficient USDC balance"
+      "reason": "Insufficient USDC balance",
+      "required_balance": "10000",
+      "current_balance": "0",
+      "timing": "pre-settlement",
+      "impact": "Settlement blocked - customer not charged"
     }
   }
 }
 ```
 
 **Solution:** Add USDC to merchant address.
+
+**Customer impact:** None - settlement never executes if pre-settlement fee collection fails.
+
+### Settlement Failed (After Pre-Settlement Fee)
+
+If settlement fails AFTER fee was collected:
+
+```json
+{
+  "error": {
+    "code": "settlement_failed",
+    "message": "Settlement execution failed",
+    "details": {
+      "fee_status": "collected",
+      "fee_amount": "10000",
+      "fee_tx_hash": "0x...",
+      "settlement_error": "Authorization expired",
+      "merchant_charged": true,
+      "customer_charged": false,
+      "note": "Merchant paid for settlement attempt"
+    }
+  }
+}
+```
+
+**Merchant impact:** Paid $0.01 for the settlement attempt.
+**Customer impact:** Never charged.
+
+**Why this is fair:** Merchant received verification and settlement attempt services. Pre-settlement prevents free service exploitation.
 
 ---
 
@@ -588,7 +652,7 @@ If merchant has insufficient USDC balance:
     
     **Avoid:** Infinite approval (max uint256)
     
-    **Why:** Limits exposure if facilitator compromised
+    **Why:** Limits exposure if facilitator compromised. Pre-settlement means fees are collected before settlement, so your risk is limited to the approved amount.
   </Accordion>
 
   <Accordion title="Monitor Allowance Regularly">
@@ -598,6 +662,8 @@ If merchant has insufficient USDC balance:
     # Cron job to check daily
     0 9 * * * node check-allowance.mjs
     ```
+    
+    Pre-settlement means settlements fail immediately when allowance depleted - good for you and customers.
   </Accordion>
 
   <Accordion title="Test on Sepolia First">
@@ -607,10 +673,13 @@ If merchant has insufficient USDC balance:
     # 1. Approve on Sepolia
     NETWORK=sepolia node approve-facilitator.mjs
     
-    # 2. Test settlements
+    # 2. Test pre-settlement flow
     npm run test
     
-    # 3. Then approve on mainnet
+    # 3. Verify fee collected BEFORE settlement
+    # Check transaction timestamps on BaseScan
+    
+    # 4. Then approve on mainnet
     NETWORK=mainnet node approve-facilitator.mjs
     ```
   </Accordion>
@@ -618,8 +687,25 @@ If merchant has insufficient USDC balance:
   <Accordion title="Maintain USDC Balance">
     Ensure sufficient USDC for fees:
     
-    - Minimum: 1 USDC (100 settlements)
-    - Recommended: Match approval amount
+    - Minimum: Match your allowance
+    - Recommended: 2x allowance (safety buffer)
+    
+    **Pre-settlement requirement:** You need actual USDC balance, not just approval. Fee is collected BEFORE settlement executes.
+  </Accordion>
+
+  <Accordion title="Monitor Failed Settlements">
+    Track settlement success rate:
+    
+    ```javascript
+    const successRate = successful_settlements / total_attempts;
+    
+    // If low, investigate:
+    // - Expired authorizations
+    // - Invalid signatures
+    // - Network issues
+    
+    // Remember: With pre-settlement, you pay for attempts
+    ```
   </Accordion>
 </AccordionGroup>
 
@@ -629,23 +715,51 @@ If merchant has insufficient USDC balance:
 
 <AccordionGroup>
   <Accordion title="Why do I need to approve the facilitator?">
-    The facilitator collects a $0.01 fee per settlement from your USDC balance via `transferFrom`. This is a standard ERC-20 pattern that requires approval.
+    The facilitator collects a $0.01 fee per settlement from your USDC balance via `transferFrom` **BEFORE** executing the customer payment. This is a standard ERC-20 pattern that requires approval.
+    
+    **Pre-settlement means:** Fee must be collectible before settlement can execute.
   </Accordion>
 
   <Accordion title="Can the facilitator access all my USDC?">
-    **No.** Only the approved amount is accessible. Approve 100 USDC → max risk is 100 USDC.
+    **No.** Only the approved amount is accessible. Pre-settlement doesn't change this.
+    
+    Approve 100 USDC → max risk is 100 USDC.
   </Accordion>
 
   <Accordion title="What if I revoke approval?">
-    Future settlements will fail with `insufficient_allowance` error. Customers won't be charged.
+    Future settlements will fail at the pre-settlement fee collection step with `insufficient_allowance` error. Customers won't be charged because settlement never executes.
   </Accordion>
 
   <Accordion title="Why not collect fee from customer?">
-    x402 requires customer payments go directly to merchants (trust-minimization). We can't split customer payments, so merchants pay the fee separately.
+    x402 requires customer payments go directly to merchants (trust-minimization). We can't split customer payments, so merchants pay the fee separately via pre-settlement collection.
   </Accordion>
 
   <Accordion title="What happens if settlement fails after fee?">
     You paid $0.01 for the settlement attempt. This prevents free service exploitation.
+    
+    **Pre-settlement rationale:** Without collecting fee first, merchants could intentionally fail settlements for free verification service.
+  </Accordion>
+
+  <Accordion title="How does pre-settlement protect customers?">
+    If your fee collection fails (insufficient allowance or balance), settlement NEVER executes. Customer is never charged.
+    
+    **Order:** Fee collection → Settlement execution
+    
+    No fee = no settlement = customer safe.
+  </Accordion>
+
+  <Accordion title="Can I see pre-settlement on-chain?">
+    Yes! Every fee collection is a blockchain transaction:
+    
+    ```bash
+    # View pre-settlement fee collection
+    https://basescan.org/tx/{fee_tx_hash}
+    
+    # View settlement (executed after fee)
+    https://basescan.org/tx/{settlement_tx_hash}
+    
+    # Verify timing: fee_tx before settlement_tx
+    ```
   </Accordion>
 </AccordionGroup>
 
@@ -655,7 +769,7 @@ If merchant has insufficient USDC balance:
 
 <CardGroup cols={2}>
   <Card title="Architecture" icon="diagram-project" href="/architecture">
-    Understand payment flow
+    Understand pre-settlement payment flow
   </Card>
   
   <Card title="API Reference" icon="book" href="/api-reference/introduction">
@@ -663,14 +777,16 @@ If merchant has insufficient USDC balance:
   </Card>
   
   <Card title="Pricing" icon="dollar-sign" href="/pricing">
-    Fee structure details
+    Pre-settlement fee structure details
   </Card>
   
   <Card title="FAQ" icon="question" href="/faq">
-    Common questions
+    Common questions about pre-settlement
   </Card>
 </CardGroup>
 
 <Check>
-**You're ready!** Approve the facilitator, configure your server with YOUR merchant address, and start accepting payments.
+**You're ready!** Approve the facilitator for pre-settlement fee collection, configure your server with YOUR merchant address, and start accepting payments.
+
+**Remember:** Fee is collected BEFORE settlement. If fee collection fails, settlement is blocked and customer is never charged. This protects customers and prevents free service exploitation.
 </Check>
